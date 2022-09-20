@@ -3,6 +3,16 @@
 A Dissect module implementing a parser for the NTFS file system, used by the Windows operating system. For more
 information, please see [the documentation](https://dissect.readthedocs.io/en/latest/projects/dissect.ntfs).
 
+## Installation
+
+`dissect.ntfs` is available on [PyPI](https://pypi.org/project/dissect.ntfs/).
+
+```bash
+pip install dissect.ntfs
+```
+
+This module is also automatically installed if you install the `dissect` package.
+
 ## Build and test instructions
 
 This project uses `tox` to build source and wheel distributions. Run the following command from the root folder to build
