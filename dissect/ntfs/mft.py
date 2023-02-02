@@ -3,7 +3,17 @@ from __future__ import annotations
 from functools import cached_property, lru_cache
 from io import BytesIO
 from operator import itemgetter
-from typing import TYPE_CHECKING, Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    BinaryIO,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 from dissect.cstruct import Instance
 
@@ -18,7 +28,13 @@ from dissect.ntfs.c_ntfs import (
     c_ntfs,
     segment_reference,
 )
-from dissect.ntfs.exceptions import BrokenMftError, Error, FileNotFoundError, MftNotAvailableError, NotADirectoryError
+from dissect.ntfs.exceptions import (
+    BrokenMftError,
+    Error,
+    FileNotFoundError,
+    MftNotAvailableError,
+    NotADirectoryError,
+)
 from dissect.ntfs.index import Index, IndexEntry
 from dissect.ntfs.util import AttributeCollection, AttributeMap, apply_fixup
 

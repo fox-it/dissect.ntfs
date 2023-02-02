@@ -1,7 +1,7 @@
 import pytest
 
-from dissect.ntfs.ntfs import NTFS
 from dissect.ntfs.exceptions import FileNotFoundError, NotADirectoryError
+from dissect.ntfs.ntfs import NTFS
 
 
 def test_ntfs(ntfs_bin):

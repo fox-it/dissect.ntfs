@@ -9,8 +9,8 @@ from dissect.ntfs.c_ntfs import (
     DEFAULT_SECTOR_SIZE,
     FILE_NUMBER_VOLUME,
     NTFS_SIGNATURE,
-    c_ntfs,
     bsf,
+    c_ntfs,
 )
 from dissect.ntfs.exceptions import Error, FileNotFoundError, VolumeNotAvailableError
 from dissect.ntfs.mft import Mft, MftRecord

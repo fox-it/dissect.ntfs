@@ -19,9 +19,9 @@ from dissect.ntfs.exceptions import FilenameNotAvailableError, VolumeNotAvailabl
 from dissect.ntfs.stream import CompressedRunlistStream
 
 if TYPE_CHECKING:
+    from dissect.ntfs.attr import Attribute
     from dissect.ntfs.mft import Mft
     from dissect.ntfs.ntfs import NTFS
-    from dissect.ntfs.attr import Attribute
 
 
 class AttributeMap(UserDict):
