@@ -1,10 +1,10 @@
 import csv
-import io
 import gzip
+import io
 import os
 
-from dissect.util.stream import MappingStream
 import pytest
+from dissect.util.stream import MappingStream
 
 
 def absolute_path(filename):

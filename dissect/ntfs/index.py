@@ -8,15 +8,20 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, List, Optio
 from dissect.ntfs.attr import AttributeRecord
 from dissect.ntfs.c_ntfs import (
     ATTRIBUTE_TYPE_CODE,
+    COLLATION,
     INDEX_ENTRY_END,
     INDEX_ENTRY_NODE,
-    COLLATION,
     SECTOR_SHIFT,
     c_ntfs,
     segment_reference,
 )
+from dissect.ntfs.exceptions import (
+    BrokenIndexError,
+    Error,
+    FileNotFoundError,
+    MftNotAvailableError,
+)
 from dissect.ntfs.util import apply_fixup
-from dissect.ntfs.exceptions import BrokenIndexError, Error, FileNotFoundError, MftNotAvailableError
 
 if TYPE_CHECKING:
     from dissect.ntfs.mft import MftRecord
