@@ -2,7 +2,6 @@ import struct
 
 from dissect import cstruct
 
-
 ntfs_def = """
 /* ================ Generic stuff ================ */
 

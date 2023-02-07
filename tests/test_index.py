@@ -3,7 +3,7 @@ import struct
 from unittest.mock import Mock
 
 from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, c_ntfs
-from dissect.ntfs.index import _cmp_filename, _cmp_ulong, IndexEntry, Match
+from dissect.ntfs.index import IndexEntry, Match, _cmp_filename, _cmp_ulong
 from dissect.ntfs.ntfs import NTFS
 
 

@@ -6,7 +6,6 @@ from dissect.ntfs.ntfs import NTFS
 from dissect.ntfs.secure import ACE, ACL, Secure, SecurityDescriptor
 from dissect.ntfs.usnjrnl import UsnJrnl, UsnRecord
 
-
 __all__ = [
     "ACE",
     "ACL",
