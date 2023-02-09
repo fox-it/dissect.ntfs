@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import io
-from typing import BinaryIO
+from typing import BinaryIO, Iterator
 from uuid import UUID
 
+from dissect.cstruct import Instance
 from dissect.util.sid import read_sid
 
 from dissect.ntfs.c_ntfs import ACE_TYPE, c_ntfs
@@ -38,7 +39,33 @@ class Secure:
         if not hasattr(self.sds, "size"):
             self.sds.size = self.sds.seek(0, io.SEEK_END)
 
-    def lookup(self, security_id: int):
+    def _iter_entries(self, offset: int = 0) -> Iterator[Instance]:
+        """Iterate over all SDS entries, optionally starting from a specific offset.
+
+        Args:
+            offset: Optional offset to start iterating from.
+        """
+        fh = self.sds
+        while True:
+            fh.seek(offset)
+
+            try:
+                entry = c_ntfs._SECURITY_DESCRIPTOR_HEADER(fh)
+            except EOFError:
+                break
+
+            if entry.Length == 0 or entry.Offset > self.sds.size or entry.Length > 0x10000:
+                # The SDS is supposedly duplicated at 0x40000 increments (256k)? Try to parse again from there
+                offset += 0x40000 - (offset % 0x40000)
+                continue
+
+            yield entry
+
+            offset += entry.Length
+            # Align to 16 bytes with some bit magic
+            offset += -(offset) & 0xF
+
+    def lookup(self, security_id: int) -> SecurityDescriptor:
         """Lookup a security descriptor by the security ID.
 
         An index is used if available ($SII), otherwise we iterate all entries until we find the correct one.
@@ -57,29 +84,17 @@ class Secure:
             # Otherwise we need to "bruteforce" our way to the correct offset
             offset = 0
 
-        fh = self.sds
-        while True:
-            fh.seek(offset)
-
-            try:
-                entry = c_ntfs._SECURITY_DESCRIPTOR_HEADER(fh)
-            except EOFError:
-                break
-
-            if entry.Length == 0 or entry.Offset > self.sds.size or entry.Length > 0x10000:
-                # The SDS is supposedly duplicated at 0x40000 increments (256k)? Try to parse again from there
-                offset += 0x40000 - (offset % 0x40000)
-                continue
-
+        for entry in self._iter_entries(offset):
             if entry.SecurityId == security_id:
                 # Jackpot
-                return SecurityDescriptor(fh)
-
-            offset += entry.Length
-            # Align to 16 bytes with some bit magic
-            offset += -(offset) & 0xF
+                return SecurityDescriptor(self.sds)
 
         raise KeyError(f"Couldn't find security ID: {security_id}")
+
+    def descriptors(self) -> Iterator[SecurityDescriptor]:
+        """Return all security descriptors."""
+        for _ in self._iter_entries():
+            yield SecurityDescriptor(self.sds)
 
 
 class SecurityDescriptor:

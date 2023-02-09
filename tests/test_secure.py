@@ -25,6 +25,8 @@ def test_secure(ntfs_bin):
     with pytest.raises(KeyError):
         fs.secure.lookup(1337)
 
+    assert len(list(fs.secure.descriptors())) == 24
+
 
 def test_secure_file(sds_bin):
     secure = Secure(sds=sds_bin)
