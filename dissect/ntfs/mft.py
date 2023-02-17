@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ntpath
 from functools import cached_property, lru_cache
 from io import BytesIO
 from operator import itemgetter
@@ -34,6 +35,7 @@ from dissect.ntfs.exceptions import (
     FileNotFoundError,
     MftNotAvailableError,
     NotADirectoryError,
+    NotAReparsePointError,
 )
 from dissect.ntfs.index import Index, IndexEntry
 from dissect.ntfs.util import AttributeCollection, AttributeMap, apply_fixup
@@ -74,9 +76,14 @@ class Mft:
         search_path = path.replace("\\", "/")
         node = root
 
-        for part in search_path.split("/"):
+        parts = search_path.split("/")
+
+        for part_num, part in enumerate(parts):
             if not part:
                 continue
+
+            while node.is_reparse_point() and part_num < len(parts):
+                node = node.reparse_point_record
 
             if not node.is_dir():
                 raise NotADirectoryError(f"Error finding path {path}: {self!r} is not a directory")
@@ -306,6 +313,45 @@ class MftRecord:
     def is_file(self) -> bool:
         """Return whether this record is a file."""
         return not self.is_dir()
+
+    def is_reparse_point(self) -> bool:
+        """Return whether this record is a reparse point."""
+        return ATTRIBUTE_TYPE_CODE.REPARSE_POINT in self.attributes
+
+    @cached_property
+    def reparse_point_name(self) -> str:
+        """Return the (printable) name of this reparse point."""
+        if not self.is_reparse_point:
+            raise NotAReparsePointError(f"{self!r} is not a reparse point")
+        return self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT].print_name
+
+    @cached_property
+    def reparse_point_substitute_name(self) -> str:
+        """Return the substitute name of this reparse point."""
+        if not self.is_reparse_point:
+            raise NotAReparsePointError(f"{self!r} is not a reparse point")
+        return self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT].substitute_name
+
+    @cached_property
+    def reparse_point_record(self) -> MftRecord:
+        """Resolve a reparse point and return the target record.
+
+        Note: absolute links (such as directory junctions) will _always_ fail in the context of a single filesystem.
+        Absolute links include the drive letter, of which we have no knowledge here.
+        """
+        if not self.is_reparse_point:
+            raise NotAReparsePointError(f"{self!r} is not a reparse point")
+
+        if not self.ntfs or not self.ntfs.mft:
+            raise MftNotAvailableError()
+
+        reparse_point = self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT]
+
+        target_name = reparse_point.print_name
+        if reparse_point.relative:
+            target_name = ntpath.join(ntpath.dirname(self.full_path()), target_name)
+
+        return self.ntfs.mft.get(target_name)
 
     def _get_stream_attributes(
         self, name: str, attr_type: ATTRIBUTE_TYPE_CODE = ATTRIBUTE_TYPE_CODE.DATA

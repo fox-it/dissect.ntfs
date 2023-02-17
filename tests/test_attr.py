@@ -3,7 +3,7 @@ import datetime
 import pytest
 
 from dissect.ntfs.attr import Attribute, FileName, StandardInformation
-from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE
+from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, IO_REPARSE_TAG
 from dissect.ntfs.exceptions import VolumeNotAvailableError
 
 
@@ -62,3 +62,49 @@ def test_attributes():
 
     with pytest.raises(VolumeNotAvailableError):
         attr.open()
+
+
+def test_reparse_point_moint_point():
+    data = bytes.fromhex(
+        "c00000005800000000000000000004004000000018000000030000a038000000"
+        "00001a001c0012005c003f003f005c0043003a005c0054006100720067006500"
+        "7400000043003a005c00540061007200670065007400"
+    )
+    attr = Attribute.from_bytes(data)
+    assert attr.type == ATTRIBUTE_TYPE_CODE.REPARSE_POINT
+
+    assert attr.tag == IO_REPARSE_TAG.MOUNT_POINT
+    assert attr.substitute_name == "\\??\\C:\\Target"
+    assert attr.print_name == "C:\\Target"
+    assert attr.absolute
+    assert not attr.relative
+
+
+def test_reparse_point_symlink():
+    data = bytes.fromhex(
+        "c000000058000000000000000000040040000000180000000c0000a038000000"
+        "12001a00000012000000000043003a005c005400610072006700650074005c00"
+        "3f003f005c0043003a005c00540061007200670065007400"
+    )
+    attr = Attribute.from_bytes(data)
+    assert attr.type == ATTRIBUTE_TYPE_CODE.REPARSE_POINT
+
+    assert attr.tag == IO_REPARSE_TAG.SYMLINK
+    assert attr.substitute_name == "\\??\\C:\\Target"
+    assert attr.print_name == "C:\\Target"
+    assert attr.absolute
+    assert not attr.relative
+
+    data = bytes.fromhex(
+        "c00000004800000000000000000004002c000000180000000c0000a024000000"
+        "0c000c0000000c00010000005400610072006700650074005400610072006700"
+        "6500740000000000"
+    )
+    attr = Attribute.from_bytes(data)
+    assert attr.type == ATTRIBUTE_TYPE_CODE.REPARSE_POINT
+
+    assert attr.tag == IO_REPARSE_TAG.SYMLINK
+    assert attr.substitute_name == "Target"
+    assert attr.print_name == "Target"
+    assert not attr.absolute
+    assert attr.relative

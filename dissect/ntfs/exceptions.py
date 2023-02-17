@@ -26,5 +26,9 @@ class NotADirectoryError(Error):
     pass
 
 
+class NotAReparsePointError(Error):
+    pass
+
+
 class VolumeNotAvailableError(Error):
     pass
