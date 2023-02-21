@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, List, Optional, Tuple
 from dissect.util.stream import RangeStream, RunlistStream
 from dissect.util.ts import wintimestamp
 
-from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, c_ntfs, segment_reference, varint
+from dissect.ntfs.c_ntfs import (
+    ATTRIBUTE_TYPE_CODE,
+    IO_REPARSE_TAG,
+    c_ntfs,
+    segment_reference,
+    varint,
+)
 from dissect.ntfs.exceptions import MftNotAvailableError, VolumeNotAvailableError
 from dissect.ntfs.util import ensure_volume, get_full_path, ts_to_ns
 
@@ -480,8 +486,61 @@ class FileName(AttributeRecord):
         return get_full_path(self.record.ntfs.mft, self.file_name, self.attr.ParentDirectory)
 
 
+class ReparsePoint(AttributeRecord):
+    """Specific AttributeRecord parser for $REPARSE_POINT."""
+
+    __slots__ = ("attr", "tag_header", "buffer")
+
+    def __init__(self, fh: BinaryIO, record: Optional[MftRecord] = None):
+        super().__init__(fh, record)
+        self.attr = c_ntfs._REPARSE_DATA_BUFFER(fh)
+        data = io.BytesIO(fh.read(self.attr.ReparseDataLength))
+
+        self.tag_header = None
+        if self.tag == IO_REPARSE_TAG.SYMLINK:
+            self.tag_header = c_ntfs._SYMBOLIC_LINK_REPARSE_BUFFER(data)
+        elif self.tag == IO_REPARSE_TAG.MOUNT_POINT:
+            self.tag_header = c_ntfs._MOUNT_POINT_REPARSE_BUFFER(data)
+
+        self.buffer = data.read()
+
+    def __repr__(self) -> str:
+        return f"<$FILE_NAME {self.print_name}>"
+
+    @property
+    def tag(self) -> IO_REPARSE_TAG:
+        return self.attr.ReparseTag
+
+    @property
+    def substitute_name(self) -> str:
+        offset = self.tag_header.SubstituteNameOffset
+        length = self.tag_header.SubstituteNameLength
+        return self.buffer[offset : offset + length].decode("utf-16-le")
+
+    @property
+    def print_name(self) -> str:
+        offset = self.tag_header.PrintNameOffset
+        length = self.tag_header.PrintNameLength
+        return self.buffer[offset : offset + length].decode("utf-16-le")
+
+    @property
+    def absolute(self) -> bool:
+        if self.tag != IO_REPARSE_TAG.SYMLINK:
+            return True
+
+        return self.tag_header.Flags == c_ntfs.SYMLINK_FLAG.ABSOLUTE
+
+    @property
+    def relative(self) -> bool:
+        if self.tag != IO_REPARSE_TAG.SYMLINK:
+            return False
+
+        return self.tag_header.Flags == c_ntfs.SYMLINK_FLAG.RELATIVE
+
+
 ATTRIBUTE_CLASS_MAP = {
     ATTRIBUTE_TYPE_CODE.STANDARD_INFORMATION: StandardInformation,
     ATTRIBUTE_TYPE_CODE.ATTRIBUTE_LIST: AttributeList,
     ATTRIBUTE_TYPE_CODE.FILE_NAME: FileName,
+    ATTRIBUTE_TYPE_CODE.REPARSE_POINT: ReparsePoint,
 }
