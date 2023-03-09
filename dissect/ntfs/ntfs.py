@@ -125,7 +125,7 @@ class NTFS:
             self.usnjrnl = UsnJrnl(usnjrnl, ntfs=self)
         elif self.mft:
             try:
-                self.usnjrnl = UsnJrnl(self.mft.get("$Extend/$Usnjrnl").open("$J"), ntfs=self)
+                self.usnjrnl = UsnJrnl(self.mft.get("$Extend\\$Usnjrnl").open("$J"), ntfs=self)
             except (FileNotFoundError, NotADirectoryError, VolumeNotAvailableError):
                 pass
 
