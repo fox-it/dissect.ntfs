@@ -73,10 +73,12 @@ class Mft:
         """
         root = root or self.root
 
-        search_path = path.replace("\\", "/")
+        # Programmatically we will often use the `/` separator, so replace it with the native path separator of NTFS
+        # `/` is an illegal character in NTFS filenames, so it's safe to replace
+        search_path = path.replace("/", "\\")
         node = root
 
-        parts = search_path.split("/")
+        parts = search_path.split("\\")
 
         for part_num, part in enumerate(parts):
             if not part:
