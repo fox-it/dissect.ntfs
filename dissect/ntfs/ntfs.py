@@ -53,10 +53,10 @@ class NTFS:
                 raise Error(f"Invalid NTFS magic: {self.boot_sector.Oem}")
 
             self.sector_size = self.boot_sector.Bpb.BytesPerSector
-            if self.boot_sector.Bpb.SectorsPerCluster < 0:
+            if self.boot_sector.Bpb.SectorsPerCluster & 0xFF > 0x80:
                 sectors_per_cluster = 1 << (-self.boot_sector.Bpb.SectorsPerCluster)
             else:
-                sectors_per_cluster = self.boot_sector.Bpb.SectorsPerCluster
+                sectors_per_cluster = self.boot_sector.Bpb.SectorsPerCluster & 0xFF
             self.cluster_size = sectors_per_cluster * self.sector_size
 
             if self.boot_sector.ClustersPerFileRecordSegment < 0:
