@@ -41,7 +41,7 @@ class AttributeMap(UserDict):
         if attr in ATTRIBUTE_TYPE_CODE:
             return self[ATTRIBUTE_TYPE_CODE[attr]]
 
-        return super().__getattribute__(self, attr)
+        return super().__getattribute__(attr)
 
     def __getitem__(self, item: Union[ATTRIBUTE_TYPE_CODE, int]) -> AttributeCollection:
         if isinstance(item, EnumInstance):
@@ -99,7 +99,7 @@ class AttributeCollection(list):
         if hasattr(self[0], attr):
             return getattr(self[0], attr)
 
-        return super().__getattribute__(self, attr)
+        return super().__getattribute__(attr)
 
     def open(self, allocated: bool = False) -> BinaryIO:
         """Open the data streams on a list of attributes, resident or non-resident.
