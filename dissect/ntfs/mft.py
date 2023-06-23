@@ -26,6 +26,7 @@ from dissect.ntfs.c_ntfs import (
     FILE_NAME_DOS,
     FILE_NUMBER_MFT,
     FILE_NUMBER_ROOT,
+    IO_REPARSE_TAG,
     c_ntfs,
     segment_reference,
 )
@@ -320,17 +321,27 @@ class MftRecord:
         """Return whether this record is a reparse point."""
         return ATTRIBUTE_TYPE_CODE.REPARSE_POINT in self.attributes
 
+    def is_symlink(self) -> bool:
+        """Return whether this record is a symlink reparse point."""
+        attr = self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT]
+        return bool(attr) and attr.tag == IO_REPARSE_TAG.SYMLINK
+
+    def is_mount_point(self) -> bool:
+        """Return whether this record is a mount point reparse point."""
+        attr = self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT]
+        return bool(attr) and attr.tag == IO_REPARSE_TAG.MOUNT_POINT
+
     @cached_property
     def reparse_point_name(self) -> str:
         """Return the (printable) name of this reparse point."""
-        if not self.is_reparse_point:
+        if not self.is_reparse_point():
             raise NotAReparsePointError(f"{self!r} is not a reparse point")
         return self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT].print_name
 
     @cached_property
     def reparse_point_substitute_name(self) -> str:
         """Return the substitute name of this reparse point."""
-        if not self.is_reparse_point:
+        if not self.is_reparse_point():
             raise NotAReparsePointError(f"{self!r} is not a reparse point")
         return self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT].substitute_name
 
@@ -341,7 +352,7 @@ class MftRecord:
         Note: absolute links (such as directory junctions) will _always_ fail in the context of a single filesystem.
         Absolute links include the drive letter, of which we have no knowledge here.
         """
-        if not self.is_reparse_point:
+        if not self.is_reparse_point():
             raise NotAReparsePointError(f"{self!r} is not a reparse point")
 
         if not self.ntfs or not self.ntfs.mft:
