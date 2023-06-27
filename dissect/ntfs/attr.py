@@ -512,13 +512,19 @@ class ReparsePoint(AttributeRecord):
         return self.attr.ReparseTag
 
     @property
-    def substitute_name(self) -> str:
+    def substitute_name(self) -> Optional[str]:
+        if not self.tag_header:
+            return None
+
         offset = self.tag_header.SubstituteNameOffset
         length = self.tag_header.SubstituteNameLength
         return self.buffer[offset : offset + length].decode("utf-16-le")
 
     @property
-    def print_name(self) -> str:
+    def print_name(self) -> Optional[str]:
+        if not self.tag_header:
+            return None
+
         offset = self.tag_header.PrintNameOffset
         length = self.tag_header.PrintNameLength
         return self.buffer[offset : offset + length].decode("utf-16-le")
