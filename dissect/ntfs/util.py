@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import struct
 from collections import UserDict
-from typing import TYPE_CHECKING, Any, BinaryIO, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, BinaryIO, Optional, Union
 
 from dissect.cstruct import EnumInstance, Instance
 from dissect.util.stream import RunlistStream
@@ -28,14 +28,14 @@ class AttributeMap(UserDict):
     """Utility dictionary-like object for interacting with a collection of attributes.
 
     Allows convenient accessing of attributes added to this collection. For example:
-    - Get attributes by name, e.g. attributes.DATA to get all $DATA attributes.
-    - Get attributes by type code enum or integer, e.g. attributes[0x80] or attributes[ATTRIBUTE_TYPE_CODE.DATA].
-    - Check attribute membership by enum or integer, e.g. 0x80 in attributes or ATTRIBUTE_TYPE_CODE.DATA in attributes.
-    - Find all attributes with a given name and type, e.g. attributes.find("$I30", ATTRIBUTE_TYPE_CODE.INDEX_ROOT).
+    - Get attributes by name, e.g. ``attributes.DATA`` to get all ``$DATA`` attributes.
+    - Get attributes by type code enum or integer, e.g. ``attributes[0x80]`` or ``attributes[ATTRIBUTE_TYPE_CODE.DATA]``.
+    - Check attribute membership by enum or integer, e.g. ``0x80 in attributes`` or ``ATTRIBUTE_TYPE_CODE.DATA in attributes``.
+    - Find all attributes with a given name and type, e.g. ``attributes.find("$I30", ATTRIBUTE_TYPE_CODE.INDEX_ROOT)``.
 
     Note that any data retrieval from an ``AttributeMap`` will always succeed and return an
     :class:`~dissect.ntfs.util.AttributeCollection`, either empty or containing one or more attributes.
-    """
+    """  # noqa: E501
 
     def __getattr__(self, attr: str) -> AttributeCollection:
         if attr in ATTRIBUTE_TYPE_CODE:
@@ -56,7 +56,7 @@ class AttributeMap(UserDict):
     def add(self, attr: Attribute) -> None:
         """Add an attribute to the collection.
 
-        Note that this is the only intended way to modify the ``AttributeMap``!
+        Note that this is the only intended way to modify the :class:`AttributeMap`!
 
         Args:
             attr: The attribute to add.
@@ -85,11 +85,11 @@ class AttributeCollection(list):
 
     Allows convenient access to attribute properties for a list of one or more attributes.
 
-    For example, if we have only one attribute we want to access the "size", we want to be able
-    to do attribute_list.size instead of attribute_list[0].size.
+    For example, if we have only one attribute we want to access the ``size``, we want to be able
+    to do ``attribute_list.size`` instead of ``attribute_list[0].size``.
 
     Additionally, we can also provide functionality here that we want to perform on a group of
-    attributes, like open() and size().
+    attributes, like ``open()`` and ``size()``.
     """
 
     def __getattr__(self, attr: str) -> Any:
@@ -154,7 +154,7 @@ class AttributeCollection(list):
         attrs = self._get_stream_attrs()
         return attrs[0].header.allocated_size if allocated else attrs[0].header.size
 
-    def dataruns(self) -> List[Tuple[int, int]]:
+    def dataruns(self) -> list[tuple[int, int]]:
         """Get the dataruns for this list of attributes.
 
         Raises:
@@ -165,10 +165,10 @@ class AttributeCollection(list):
 
         return self._get_dataruns()
 
-    def _get_stream_attrs(self) -> List[Attribute]:
+    def _get_stream_attrs(self) -> list[Attribute]:
         return sorted((attr for attr in self if not attr.header.resident), key=lambda attr: attr.header.lowest_vcn)
 
-    def _get_dataruns(self, attrs: Optional[List[Attribute]] = None) -> List[Tuple[int, int]]:
+    def _get_dataruns(self, attrs: Optional[list[Attribute]] = None) -> list[tuple[int, int]]:
         attrs = attrs or self._get_stream_attrs()
 
         runs = []
@@ -179,7 +179,7 @@ class AttributeCollection(list):
 
 
 def apply_fixup(data: bytes) -> bytes:
-    """Parse and apply fixup data from MULTI_SECTOR_HEADER to the given bytes.
+    """Parse and apply fixup data from ``MULTI_SECTOR_HEADER`` to the given bytes.
 
     Args:
         data: The bytes to fixup
@@ -225,7 +225,7 @@ def ensure_volume(ntfs: NTFS) -> None:
     """Check if a volume is available for reading.
 
     A volume in this context refers to a disk or other file that contains the raw NTFS data, not contained
-    in system files like the $MFT.
+    in system files like the ``$MFT``.
 
     Raises:
         VolumeNotAvailableError: If a volume is not available.
@@ -234,7 +234,7 @@ def ensure_volume(ntfs: NTFS) -> None:
         raise VolumeNotAvailableError()
 
 
-def get_full_path(mft: Mft, name: str, parent: Instance, seen: Set[str] = None) -> str:
+def get_full_path(mft: Mft, name: str, parent: Instance, seen: set[str] = None) -> str:
     """Walk up parent file references to construct a full path.
 
     Args:

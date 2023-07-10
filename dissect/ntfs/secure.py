@@ -12,13 +12,13 @@ from dissect.ntfs.mft import MftRecord
 
 
 class Secure:
-    """Lookup security descriptors from the $Secure file, or optionally just a file-like object of the $SDS.
+    """Lookup security descriptors from the ``$Secure`` file, or optionally just a file-like object of the ``$SDS``.
 
-    Only one the record or sds arguments needs to be provided.
+    Only one the ``record`` or ``sds`` arguments needs to be provided.
 
     Args:
-        record: The MFT record of the $Secure file, used when opening from a full NTFS volume.
-        sds: A file-like object of the $SDS stream, used when opening from separate system files.
+        record: The MFT record of the ``$Secure`` file, used when opening from a full NTFS volume.
+        sds: A file-like object of the ``$SDS`` stream, used when opening from separate system files.
     """
 
     def __init__(self, record: MftRecord = None, sds: BinaryIO = None):
@@ -68,7 +68,7 @@ class Secure:
     def lookup(self, security_id: int) -> SecurityDescriptor:
         """Lookup a security descriptor by the security ID.
 
-        An index is used if available ($SII), otherwise we iterate all entries until we find the correct one.
+        An index is used if available (``$SII``), otherwise we iterate all entries until we find the correct one.
 
         Args:
             security_id: The security ID to lookup.

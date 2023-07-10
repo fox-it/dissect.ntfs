@@ -17,11 +17,11 @@ if TYPE_CHECKING:
 
 
 class UsnJrnl:
-    """Parse the USN journal from a file-like object of the $UsnJrnl:$J stream.
+    """Parse the USN journal from a file-like object of the ``$UsnJrnl:$J`` stream.
 
     Args:
         fh: A file-like object of the $UsnJrnl:$J stream.
-        ntfs: An optional NTFS class instance, used for resolving file paths.
+        ntfs: An optional :class:`~dissect.ntfs.ntfs.NTFS` class instance, used for resolving file paths.
     """
 
     def __init__(self, fh: BinaryIO, ntfs: Optional[NTFS] = None):
@@ -67,7 +67,7 @@ class UsnRecord:
     """Parse a USN record from a file-like object and offset.
 
     Args:
-        usnjrnl: The ``UsnJrnl`` class this record is parsed from.
+        usnjrnl: The :class:`UsnJrnl` class this record is parsed from.
         fh: The file-like object to parse a USN record from.
         offset: The offset to parse a USN record at.
     """
