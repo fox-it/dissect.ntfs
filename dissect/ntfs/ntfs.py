@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import BinaryIO, Iterator, List, Optional, Tuple
+from typing import BinaryIO, Iterator, Optional
 
 from dissect.ntfs.c_ntfs import (
     ATTRIBUTE_TYPE_CODE,
@@ -23,15 +23,15 @@ class NTFS:
 
     This implementation supports parsing NTFS from either a full NTFS volume or from separate files.
     If you have a file-like object of an NTFS volume, simply pass it as the fh argument. If you have separate
-    file-like objects for things like $BOOT or $MFT, pass those as the boot and mft arguments.
+    file-like objects for things like ``$BOOT`` or ``$MFT``, pass those as the boot and mft arguments.
     The separate arguments take precedence over parsing from the volume file-like object.
 
     Args:
         fh: A file-like object for the volume to use for parsing NTFS. This is where "data on disk" is read from.
-        boot: A file-like object for the $BOOT file.
-        mft: A file-like object for the $MFT file.
-        usnjrnl: A file-like object for the $Extend/$Usnjrnl:$J file.
-        sds: A file-like object for the $Secure:$SDS file.
+        boot: A file-like object for the ``$BOOT`` file.
+        mft: A file-like object for the ``$MFT`` file.
+        usnjrnl: A file-like object for the ``$Extend/$Usnjrnl:$J`` file.
+        sds: A file-like object for the ``$Secure:$SDS`` file.
     """
 
     def __init__(
@@ -146,7 +146,7 @@ class NTFS:
             return None
 
 
-def _get_dataruns_from_attribute_list(record: MftRecord) -> Iterator[List[Tuple[int, int]]]:
+def _get_dataruns_from_attribute_list(record: MftRecord) -> Iterator[list[tuple[int, int]]]:
     for attr in record.attributes[ATTRIBUTE_TYPE_CODE.ATTRIBUTE_LIST].attributes():
         if attr.type == ATTRIBUTE_TYPE_CODE.DATA:
             yield attr.dataruns()

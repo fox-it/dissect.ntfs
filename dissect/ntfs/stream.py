@@ -1,12 +1,12 @@
 import io
-from typing import BinaryIO, List, Tuple
+from typing import BinaryIO
 
 from dissect.util import lznt1
 from dissect.util.stream import RunlistStream
 
 
 class CompressedRunlistStream(RunlistStream):
-    """Specialized RunlistStream for reading NTFS compressed streams.
+    """Specialized :class:`~dissect.util.stream.RunlistStream` for reading NTFS compressed streams.
 
     Args:
         fh: The source file-like object.
@@ -16,7 +16,7 @@ class CompressedRunlistStream(RunlistStream):
     """
 
     def __init__(
-        self, fh: BinaryIO, runlist: List[Tuple[int, int]], size: int, cluster_size: int, compression_unit: int
+        self, fh: BinaryIO, runlist: list[tuple[int, int]], size: int, cluster_size: int, compression_unit: int
     ):
         # RunlistStream has block_size but we want to make cluster_size available to be more in line with NTFS naming
         self.cluster_size = cluster_size
@@ -31,11 +31,11 @@ class CompressedRunlistStream(RunlistStream):
         self.block_size = cluster_size
 
     @property
-    def runlist(self) -> List[Tuple[int, int]]:
+    def runlist(self) -> list[tuple[int, int]]:
         return self._runlist
 
     @runlist.setter
-    def runlist(self, runlist: List[Tuple[int, int]]) -> None:
+    def runlist(self, runlist: list[tuple[int, int]]) -> None:
         self._runlist = runlist
 
         runs = []

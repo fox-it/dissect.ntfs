@@ -4,17 +4,7 @@ import ntpath
 from functools import cached_property, lru_cache
 from io import BytesIO
 from operator import itemgetter
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    BinaryIO,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional, Union
 
 from dissect.cstruct import Instance
 
@@ -46,7 +36,7 @@ if TYPE_CHECKING:
 
 
 class Mft:
-    """Interact with the $MFT (Master File Table).
+    """Interact with the ``$MFT`` (Master File Table).
 
     Args:
         fh: A file-like object of the $MFT file.
@@ -104,9 +94,9 @@ class Mft:
         """Retrieve an MFT record using a variety of methods.
 
         Supported references are:
-        - _MFT_SEGMENT_REFERENCE cstruct instance
-        - integer segment number
-        - string file path
+            - ``_MFT_SEGMENT_REFERENCE`` cstruct instance
+            - integer segment number
+            - string file path
 
         Args:
             ref: Reference to retrieve the record by.
@@ -146,7 +136,7 @@ class Mft:
 class MftRecord:
     """MFT record parsing and interaction.
 
-    Use the from_fh or from_bytes class methods to instantiate.
+    Use the :func:`~MftRecord.from_fh` or :func:`~MftRecord.from_bytes` class methods to instantiate.
     """
 
     def __init__(self):
@@ -206,7 +196,7 @@ class MftRecord:
         return obj
 
     def get(self, path: str) -> MftRecord:
-        """Retrieve a MftRecord relative to this one.
+        """Retrieve a :class:`MftRecord` relative to this one.
 
         Args:
             path: The path to lookup.
@@ -222,7 +212,7 @@ class MftRecord:
     def attributes(self) -> AttributeMap:
         """Parse and return the attributes in this MFT record.
 
-        $ATTRIBUTE_LIST's are only parsed if there's an MFT available on the NTFS object.
+        ``$ATTRIBUTE_LIST``'s are only parsed if there's an MFT available on the NTFS object.
 
         Raises:
             BrokenMftError: If an error occurred parsing the attributes.
@@ -263,16 +253,16 @@ class MftRecord:
 
     @cached_property
     def resident(self) -> bool:
-        """Return whether this record's default $DATA attribute is resident."""
+        """Return whether this record's default ``$DATA`` attribute is resident."""
         return any(attr.header.resident for attr in self.attributes[ATTRIBUTE_TYPE_CODE.DATA])
 
     @cached_property
     def filename(self) -> Optional[str]:
-        """Return the first file name, or None if this record has no file names."""
+        """Return the first file name, or ``None`` if this record has no file names."""
         filenames = self.filenames()
         return filenames[0] if filenames else None
 
-    def filenames(self, ignore_dos: bool = False) -> List[str]:
+    def filenames(self, ignore_dos: bool = False) -> list[str]:
         """Return all file names of this record.
 
         Args:
@@ -285,8 +275,8 @@ class MftRecord:
             result.append((attr.flags, attr.file_name))
         return [item[1] for item in sorted(result, key=itemgetter(0))]
 
-    def full_path(self, ignore_dos: bool = False):
-        """Return the first full path, or None if this record has no file names.
+    def full_path(self, ignore_dos: bool = False) -> Optional[str]:
+        """Return the first full path, or ``None`` if this record has no file names.
 
         Args:
             ignore_dos: Ignore DOS file name entries.
@@ -294,7 +284,7 @@ class MftRecord:
         paths = self.full_paths(ignore_dos)
         return paths[0] if paths else None
 
-    def full_paths(self, ignore_dos: bool = False):
+    def full_paths(self, ignore_dos: bool = False) -> list[str]:
         """Return all full paths of this record.
 
         Args:
@@ -349,7 +339,7 @@ class MftRecord:
     def reparse_point_record(self) -> MftRecord:
         """Resolve a reparse point and return the target record.
 
-        Note: absolute links (such as directory junctions) will _always_ fail in the context of a single filesystem.
+        Note: absolute links (such as directory junctions) will *always* fail in the context of a single filesystem.
         Absolute links include the drive letter, of which we have no knowledge here.
         """
         if not self.is_reparse_point():
@@ -369,7 +359,7 @@ class MftRecord:
     def _get_stream_attributes(
         self, name: str, attr_type: ATTRIBUTE_TYPE_CODE = ATTRIBUTE_TYPE_CODE.DATA
     ) -> AttributeCollection[Attribute]:
-        """Return the AttributeCollection of all attributes with the given name and attribute type.
+        """Return the :class:`~dissect.ntfs.util.AttributeCollection` of all attributes with the given name and attribute type.
 
         Args:
             name: The attribute name, often an empty string.
@@ -377,7 +367,7 @@ class MftRecord:
 
         Raises:
             FileNotFoundError: If there are no attributes with the given name and type.
-        """
+        """  # noqa: E501
         attrs = self.attributes.find(name, attr_type)
         if not attrs:
             raise FileNotFoundError(f"No such stream on record {self}: ({name!r}, {attr_type})")
@@ -421,7 +411,7 @@ class MftRecord:
 
     def dataruns(
         self, name: str = "", attr_type: ATTRIBUTE_TYPE_CODE = ATTRIBUTE_TYPE_CODE.DATA
-    ) -> List[Tuple[int, int]]:
+    ) -> list[tuple[int, int]]:
         """Return the dataruns of the given stream name and type.
 
         Args:
@@ -441,7 +431,7 @@ class MftRecord:
         """Open an index on this record.
 
         Args:
-            name: The index name to open. For example, "$I30".
+            name: The index name to open. For example, ``"$I30"``.
         """
         return Index(self, name)
 
@@ -449,12 +439,12 @@ class MftRecord:
         """Yield directory entries of this record.
 
         Args:
-            dereference: Determines whether to resolve the IndexEntry's to MftRecord's. This impacts performance.
+            dereference: Determines whether to resolve the :class:`~dissect.ntfs.index.IndexEntry`'s to :class:`MftRecord`'s. This impacts performance.
             ignore_dos: Ignore DOS file name entries.
 
         Raises:
             NotADirectoryError: If this record is not a directory.
-        """
+        """  # noqa: E501
         if not self.is_dir():
             raise NotADirectoryError(f"{self!r} is not a directory")
 
@@ -463,16 +453,16 @@ class MftRecord:
                 continue
             yield entry.dereference() if dereference else entry
 
-    def listdir(self, dereference: bool = False, ignore_dos: bool = False) -> Dict[str, Union[IndexEntry, MftRecord]]:
+    def listdir(self, dereference: bool = False, ignore_dos: bool = False) -> dict[str, Union[IndexEntry, MftRecord]]:
         """Return a dictionary of the directory entries of this record.
 
         Args:
-            dereference: Determines whether to resolve the IndexEntry's to MftRecord's. This impacts performance.
+            dereference: Determines whether to resolve the :class:`~dissect.ntfs.index.IndexEntry`'s to :class:`MftRecord`'s. This impacts performance.
             ignore_dos: Ignore DOS file name entries.
 
         Raises:
             NotADirectoryError: If this record is not a directory.
-        """
+        """  # noqa: E501
         result = {}
         for entry in self.iterdir(dereference, ignore_dos):
             filenames = entry.filenames(ignore_dos) if dereference else [entry.attribute.file_name]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional
 
 from dissect.util.stream import RangeStream, RunlistStream
 from dissect.util.ts import wintimestamp
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 class Attribute:
     """Parse and interact with MFT attributes.
 
-    Wrapper for an AttributeHeader and AttributeRecord combination.
+    Wrapper for an :class:`AttributeHeader` and :class:`AttributeRecord` combination.
 
     Args:
         record: The MFT record this attribute belongs to.
@@ -86,7 +86,7 @@ class Attribute:
         """Return the name of this attribute."""
         return self.header.name
 
-    def dataruns(self) -> List[Tuple[int, int]]:
+    def dataruns(self) -> list[tuple[int, int]]:
         """Return the dataruns of this attribute, if non-resident.
 
         Raises:
@@ -194,7 +194,7 @@ class AttributeHeader:
         """Return the compression unit if non-resident, else None."""
         return self.header.Form.Nonresident.CompressionUnit if not self.resident else None
 
-    def dataruns(self) -> List[Tuple[int, int]]:
+    def dataruns(self) -> list[tuple[int, int]]:
         """Return the dataruns of this attribute, if non-resident.
 
         Raises:
@@ -281,7 +281,7 @@ class AttributeRecord:
     ) -> AttributeRecord:
         """Parse an attribute from a file-like object.
 
-        Selects a more specific AttributeRecord class if one is available for the given attribute type.
+        Selects a more specific :class:`AttributeRecord` class if one is available for the given attribute type.
 
         Args:
             fh: The file-like object to parse an attribute from.
@@ -292,7 +292,7 @@ class AttributeRecord:
 
 
 class AttributeList(AttributeRecord):
-    """Specific AttributeRecord parser for $ATTRIBUTE_LIST."""
+    """Specific :class:`AttributeRecord` parser for ``$ATTRIBUTE_LIST``."""
 
     __slots__ = ("entries",)
 
@@ -320,7 +320,7 @@ class AttributeList(AttributeRecord):
         return "<$ATTRIBUTE_LIST>"
 
     def attributes(self) -> Iterator[Attribute]:
-        """Iterate all entries within this $ATTRIBUTE_LIST and yield all embedded attributes."""
+        """Iterate all entries within this ``$ATTRIBUTE_LIST`` and yield all embedded attributes."""
         if not self.record:
             raise MftNotAvailableError("Can't iterate $ATTRIBUTE_LIST attributes without a bounded MFT record")
 
@@ -339,7 +339,7 @@ class AttributeList(AttributeRecord):
 
 
 class StandardInformation(AttributeRecord):
-    """Specific AttributeRecord parser for $STANDARD_INFORMATION."""
+    """Specific :class:`AttributeRecord` parser for ``$STANDARD_INFORMATION``."""
 
     __slots__ = ("attr",)
 
@@ -354,62 +354,62 @@ class StandardInformation(AttributeRecord):
 
     @property
     def creation_time(self) -> datetime:
-        """Return the $STANDARD_INFORMATION CreationTime."""
+        """Return the ``$STANDARD_INFORMATION`` ``CreationTime``."""
         return wintimestamp(self.attr.CreationTime)
 
     @property
     def creation_time_ns(self) -> int:
-        """Return the $STANDARD_INFORMATION CreationTime in nanoseconds."""
+        """Return the ``$STANDARD_INFORMATION`` ``CreationTime`` in nanoseconds."""
         return ts_to_ns(self.attr.CreationTime)
 
     @property
     def last_modification_time(self) -> datetime:
-        """Return the $STANDARD_INFORMATION LastModificationTime."""
+        """Return the ``$STANDARD_INFORMATION`` ``LastModificationTime``."""
         return wintimestamp(self.attr.LastModificationTime)
 
     @property
     def last_modification_time_ns(self) -> int:
-        """Return the $STANDARD_INFORMATION LastModificationTime in nanoseconds."""
+        """Return the ``$STANDARD_INFORMATION`` ``LastModificationTime`` in nanoseconds."""
         return ts_to_ns(self.attr.LastModificationTime)
 
     @property
     def last_change_time(self) -> datetime:
-        """Return the $STANDARD_INFORMATION LastChangeTime."""
+        """Return the ``$STANDARD_INFORMATION`` ``LastChangeTime``."""
         return wintimestamp(self.attr.LastChangeTime)
 
     @property
     def last_change_time_ns(self) -> int:
-        """Return the $STANDARD_INFORMATION LastChangeTime in nanoseconds."""
+        """Return the ``$STANDARD_INFORMATION`` ``LastChangeTime`` in nanoseconds."""
         return ts_to_ns(self.attr.LastChangeTime)
 
     @property
     def last_access_time(self) -> datetime:
-        """Return the $STANDARD_INFORMATION LastAccessTime."""
+        """Return the ``$STANDARD_INFORMATION`` ``LastAccessTime``."""
         return wintimestamp(self.attr.LastAccessTime)
 
     @property
     def last_access_time_ns(self) -> int:
-        """Return the $STANDARD_INFORMATION LastAccessTime in nanoseconds."""
+        """Return the ``$STANDARD_INFORMATION`` ``LastAccessTime`` in nanoseconds."""
         return ts_to_ns(self.attr.LastAccessTime)
 
     @property
     def file_attributes(self) -> int:
-        """Return the $STANDARD_INFORMATION FileAttributes."""
+        """Return the ``$STANDARD_INFORMATION`` ``FileAttributes``."""
         return self.attr.FileAttributes
 
     @property
     def owner_id(self) -> int:
-        """Return the $STANDARD_INFORMATION OwnerId."""
+        """Return the ``$STANDARD_INFORMATION`` ``OwnerId``."""
         return self.attr.OwnerId
 
     @property
     def security_id(self) -> int:
-        """Return the $STANDARD_INFORMATION SecurityId."""
+        """Return the ``$STANDARD_INFORMATION`` ``SecurityId``."""
         return self.attr.SecurityId
 
 
 class FileName(AttributeRecord):
-    """Specific AttributeRecord parser for $FILE_NAME."""
+    """Specific :class:`AttributeRecord` parser for ``$FILE_NAME``."""
 
     __slots__ = ("attr",)
 
@@ -423,62 +423,62 @@ class FileName(AttributeRecord):
 
     @property
     def creation_time(self) -> datetime:
-        """Return the $FILE_NAME file CreationTime."""
+        """Return the ``$FILE_NAME``file ``CreationTime``."""
         return wintimestamp(self.attr.CreationTime)
 
     @property
     def creation_time_ns(self) -> int:
-        """Return the $FILE_NAME file CreationTime in nanoseconds."""
+        """Return the ``$FILE_NAME`` file ``CreationTime`` in nanoseconds."""
         return ts_to_ns(self.attr.CreationTime)
 
     @property
     def last_modification_time(self) -> datetime:
-        """Return the $FILE_NAME file LastModificationTime."""
+        """Return the ``$FILE_NAME`` file ``LastModificationTime``."""
         return wintimestamp(self.attr.LastModificationTime)
 
     @property
     def last_modification_time_ns(self) -> int:
-        """Return the $FILE_NAME file LastModificationTime in nanoseconds."""
+        """Return the ``$FILE_NAME`` file ``LastModificationTime`` in nanoseconds."""
         return ts_to_ns(self.attr.LastModificationTime)
 
     @property
     def last_change_time(self) -> datetime:
-        """Return the $FILE_NAME file LastChangeTime."""
+        """Return the ``$FILE_NAME`` file ``LastChangeTime``."""
         return wintimestamp(self.attr.LastChangeTime)
 
     @property
     def last_change_time_ns(self) -> int:
-        """Return the $FILE_NAME file LastChangeTime in nanoseconds."""
+        """Return the ``$FILE_NAME`` file ``LastChangeTime`` in nanoseconds."""
         return ts_to_ns(self.attr.LastChangeTime)
 
     @property
     def last_access_time(self) -> datetime:
-        """Return the $FILE_NAME file LastAccessTime."""
+        """Return the ``$FILE_NAME`` file ``LastAccessTime``."""
         return wintimestamp(self.attr.LastAccessTime)
 
     @property
     def last_access_time_ns(self) -> int:
-        """Return the $FILE_NAME file LastAccessTime in nanoseconds."""
+        """Return the ``$FILE_NAME`` file ``LastAccessTime`` in nanoseconds."""
         return ts_to_ns(self.attr.LastAccessTime)
 
     @property
     def file_size(self) -> int:
-        """Return the $FILE_NAME file FileSize."""
+        """Return the ``$FILE_NAME`` file ``FileSize``."""
         return self.attr.FileSize
 
     @property
     def file_attributes(self) -> int:
-        """Return the $FILE_NAME file FileAttributes."""
+        """Return the ``$FILE_NAME`` file ``FileAttributes``."""
         return self.attr.FileAttributes
 
     @property
     def flags(self) -> int:
-        """Return the $FILE_NAME flags, which can be either FILE_NAME_NTFS or FILE_NAME_DOS."""
+        """Return the ``$FILE_NAME`` flags, which can be either ``FILE_NAME_NTFS`` or ``FILE_NAME_DOS``."""
         return self.attr.Flags
 
     @property
     def file_name(self) -> str:
-        """Return the file name string stored in this $FILE_NAME attribute."""
+        """Return the file name string stored in this ``$FILE_NAME`` attribute."""
         return self.attr.FileName
 
     def full_path(self) -> str:
@@ -487,7 +487,7 @@ class FileName(AttributeRecord):
 
 
 class ReparsePoint(AttributeRecord):
-    """Specific AttributeRecord parser for $REPARSE_POINT."""
+    """Specific :class:`AttributeRecord` parser for ``$REPARSE_POINT``."""
 
     __slots__ = ("attr", "tag_header", "buffer")
 

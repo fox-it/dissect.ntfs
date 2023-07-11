@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 from enum import Enum, auto
 from functools import cached_property, lru_cache
-from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, List, Optional
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, Optional
 
 from dissect.ntfs.attr import AttributeRecord
 from dissect.ntfs.c_ntfs import (
@@ -64,7 +64,7 @@ class Index:
 
     @lru_cache(128)
     def index_buffer(self, vcn: int) -> IndexBuffer:
-        """Return the IndexBuffer at the specified cluster number.
+        """Return the :class:`IndexBuffer` at the specified cluster number.
 
         Args:
             vcn: The virtual cluster number within the index allocation to read.
@@ -122,7 +122,7 @@ class Index:
         return entry
 
     def entries(self) -> Iterator[IndexEntry]:
-        """Yield all IndexEntry's in this Index."""
+        """Yield all :class:`IndexEntry`'s in this :class:`Index`."""
 
         for entry in self.root.entries():
             if entry.is_end:
@@ -148,10 +148,10 @@ class Index:
 
 
 class IndexRoot:
-    """Represents the $INDEX_ROOT.
+    """Represents the ``$INDEX_ROOT``.
 
     Args:
-        index: The Index class instance this IndexRoot belongs to.
+        index: The :class:`Index`` class instance this :class:`IndexRoot` belongs to.
         fh: The file-like object to parse an index root on.
     """
 
@@ -182,7 +182,7 @@ class IndexRoot:
         return self.header.ClustersPerIndexBuffer
 
     def entries(self) -> Iterator[IndexEntry]:
-        """Yield all IndexEntry's in this IndexRoot."""
+        """Yield all :class:`IndexEntry`'s in this :class:`IndexRoot`."""
         yield from _iter_entries(
             self.index,
             self.fh,
@@ -193,11 +193,11 @@ class IndexRoot:
 
 
 class IndexBuffer:
-    """Represent an index buffer in $INDEX_ALLOCATION.
+    """Represent an index buffer in ``$INDEX_ALLOCATION``.
 
     Args:
-        index: The Index class instance this IndexRoot belongs to.
-        fh: The file-like object of $INDEX_ALLOCATION.
+        index: The :class:`Index` class instance this :class:`IndexRoot` belongs to.
+        fh: The file-like object of ``$INDEX_ALLOCATION``.
         offset: The offset in bytes to the index buffer on the file-like object we want to read.
         size: The size of the index buffer in bytes.
 
@@ -224,7 +224,7 @@ class IndexBuffer:
         self.header = c_ntfs._INDEX_ALLOCATION_BUFFER(self.data)
 
     def entries(self) -> Iterator[IndexEntry]:
-        """Yield all IndexEntry's in this IndexBuffer."""
+        """Yield all :class:`IndexEntry`'s in this :class:`IndexBuffer`."""
         yield from _iter_entries(
             self.index,
             io.BytesIO(self.data),
@@ -238,7 +238,7 @@ class IndexEntry:
     """Parse and interact with index entries.
 
     Args:
-        index: The Index class instance this IndexEntry belongs to.
+        index: The :class:`Index` class instance this :class:`IndexEntry` belongs to.
         fh: The file-like object to parse an index entry on.
         offset: The offset in the file-like object to parse an index entry at.
     """
@@ -253,7 +253,7 @@ class IndexEntry:
         self.buf = fh.read(self.header.Length - len(c_ntfs._INDEX_ENTRY))
 
     def dereference(self) -> MftRecord:
-        """Dereference this IndexEntry to the MFT record it points to.
+        """Dereference this :class:`IndexEntry` to the MFT record it points to.
 
         Note that the file reference is a union with the data part so only access this if you know the entry has
         a file reference and not a data part.
@@ -284,7 +284,7 @@ class IndexEntry:
 
     @cached_property
     def attribute(self) -> Optional[AttributeRecord]:
-        """Return the AttributeRecord of the attribute contained in this entry."""
+        """Return the :class:`dissect.ntfs.attr.AttributeRecord` of the attribute contained in this entry."""
         if self.key_length and self.index.root.attribute_type:
             return AttributeRecord.from_fh(
                 io.BytesIO(self.buf),
@@ -337,7 +337,7 @@ def _iter_entries(index: Index, fh: BinaryIO, offset: int, size: int) -> Iterato
         offset += entry.length
 
 
-def _bsearch(entries: List[IndexEntry], value: Any, cmp: Callable[[IndexEntry, Any], Match]) -> IndexEntry:
+def _bsearch(entries: list[IndexEntry], value: Any, cmp: Callable[[IndexEntry, Any], Match]) -> IndexEntry:
     min_idx = 0
     max_idx = len(entries) - 1
 
