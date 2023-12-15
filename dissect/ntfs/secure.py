@@ -7,7 +7,7 @@ from uuid import UUID
 from dissect.cstruct import Instance
 from dissect.util.sid import read_sid
 
-from dissect.ntfs.c_ntfs import ACE_TYPE, c_ntfs
+from dissect.ntfs.c_ntfs import ACE_TYPE, ACE_OBJECT_FLAGS, c_ntfs
 from dissect.ntfs.mft import MftRecord
 
 
@@ -158,16 +158,26 @@ class ACE:
         self.object_type = None
         self.inherited_object_type = None
         self.sid = None
+        self.compound_type = None
+        self.server_sid = None
 
         buf = io.BytesIO(self.data)
         if self.is_standard_ace:
             self.mask = c_ntfs.DWORD(buf)
             self.sid = read_sid(buf)
+        elif self.is_compound_ace:
+            self.mask = c_ntfs.DWORD(buf)
+            self.compound_type = c_ntfs.COMPOUND_ACE_TYPE(buf)
+            c_ntfs.USHORT(buf)
+            self.server_sid = read_sid(buf)
+            self.sid = read_sid(buf)
         elif self.is_object_ace:
             self.mask = c_ntfs.DWORD(buf)
             self.flags = c_ntfs.DWORD(buf)
-            self.object_type = UUID(bytes_le=buf.read(16))
-            self.inherited_object_type = UUID(bytes_le=buf.read(16))
+            if self.flags & ACE_OBJECT_FLAGS.ACE_OBJECT_TYPE_PRESENT:
+                self.object_type = UUID(bytes_le=buf.read(16))
+            if self.flags & ACE_OBJECT_FLAGS.ACE_INHERITED_OBJECT_TYPE_PRESENT:
+                self.inherited_object_type = UUID(bytes_le=buf.read(16))
             self.sid = read_sid(buf)
 
         self.application_data = buf.read() or None
@@ -175,6 +185,8 @@ class ACE:
     def __repr__(self) -> str:
         if self.is_standard_ace:
             return f"<{self.header.AceType.name} mask=0x{self.mask:x} sid={self.sid}>"
+        elif self.is_compound_ace:
+            return f"<{self.header.AceType.name} mask=0x{self.mask:x} type={self.compound_type.name} server_sid={self.server_sid} client_sid={self.sid}>"
         elif self.is_object_ace:
             return (
                 f"<{self.header.AceType.name} mask=0x{self.mask:x} flags={self.flags} object_type={self.object_type}"
@@ -196,7 +208,6 @@ class ACE:
             ACE_TYPE.ACCESS_DENIED,
             ACE_TYPE.SYSTEM_AUDIT,
             ACE_TYPE.SYSTEM_ALARM,
-            ACE_TYPE.ACCESS_ALLOWED_COMPOUND,
             ACE_TYPE.ACCESS_ALLOWED_CALLBACK,
             ACE_TYPE.ACCESS_DENIED_CALLBACK,
             ACE_TYPE.SYSTEM_AUDIT_CALLBACK,
@@ -204,6 +215,15 @@ class ACE:
             ACE_TYPE.SYSTEM_MANDATORY_LABEL,
             ACE_TYPE.SYSTEM_RESOURCE_ATTRIBUTE,
             ACE_TYPE.SYSTEM_SCOPED_POLICY_ID,
+            ACE_TYPE.SYSTEM_PROCESS_TRUST_LABEL,
+            ACE_TYPE.SYSTEM_ACCESS_FILTER,
+        )
+
+    @property
+    def is_compound_ace(self) -> bool:
+        """Return whether this ACE is a compound ACE."""
+        return self.header.AceType in (
+            ACE_TYPE.ACCESS_ALLOWED_COMPOUND,
         )
 
     @property
