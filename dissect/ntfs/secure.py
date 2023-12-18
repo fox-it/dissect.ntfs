@@ -7,7 +7,7 @@ from uuid import UUID
 from dissect.cstruct import Instance
 from dissect.util.sid import read_sid
 
-from dissect.ntfs.c_ntfs import ACE_TYPE, ACE_OBJECT_FLAGS, c_ntfs
+from dissect.ntfs.c_ntfs import ACE_OBJECT_FLAGS, ACE_TYPE, c_ntfs
 from dissect.ntfs.mft import MftRecord
 
 
@@ -186,7 +186,10 @@ class ACE:
         if self.is_standard_ace:
             return f"<{self.header.AceType.name} mask=0x{self.mask:x} sid={self.sid}>"
         elif self.is_compound_ace:
-            return f"<{self.header.AceType.name} mask=0x{self.mask:x} type={self.compound_type.name} server_sid={self.server_sid} client_sid={self.sid}>"
+            return (
+                f"<{self.header.AceType.name} mask=0x{self.mask:x} type={self.compound_type.name}"
+                f" server_sid={self.server_sid} client_sid={self.sid}>"
+            )
         elif self.is_object_ace:
             return (
                 f"<{self.header.AceType.name} mask=0x{self.mask:x} flags={self.flags} object_type={self.object_type}"
@@ -222,9 +225,7 @@ class ACE:
     @property
     def is_compound_ace(self) -> bool:
         """Return whether this ACE is a compound ACE."""
-        return self.header.AceType in (
-            ACE_TYPE.ACCESS_ALLOWED_COMPOUND,
-        )
+        return self.header.AceType in (ACE_TYPE.ACCESS_ALLOWED_COMPOUND,)
 
     @property
     def is_object_ace(self) -> bool:

@@ -3,7 +3,7 @@ from io import BytesIO
 from dissect.ntfs.usnjrnl import UsnRecord
 
 
-def test_usnjrnl_record_v4():
+def test_usnjrnl_record_v4() -> None:
     data = bytes.fromhex(
         "5000000004000000c1000000000001000000000000000000bf00000000000100"
         "0000000000000000d00201000000000003810080000000000000000001001000"
@@ -15,7 +15,7 @@ def test_usnjrnl_record_v4():
     assert record.extents[0].Length == 0x284000
 
 
-def test_usnjrnl_record_v2():
+def test_usnjrnl_record_v2() -> None:
     data = bytes.fromhex(
         "5800000002000000c100000000000100bf000000000001002003010000000000"
         "6252641a86a4d7010381008000000000000000002000000018003c0069007300"

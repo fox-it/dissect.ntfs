@@ -7,7 +7,7 @@ from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, IO_REPARSE_TAG
 from dissect.ntfs.exceptions import VolumeNotAvailableError
 
 
-def test_attributes():
+def test_attributes() -> None:
     # Single $STANDARD_INFORMATION attribute
     data = bytes.fromhex(
         "100000006000000000001800000000004800000018000000d2145d665666d801"
@@ -64,7 +64,7 @@ def test_attributes():
         attr.open()
 
 
-def test_reparse_point_moint_point():
+def test_reparse_point_moint_point() -> None:
     data = bytes.fromhex(
         "c00000005800000000000000000004004000000018000000030000a038000000"
         "00001a001c0012005c003f003f005c0043003a005c0054006100720067006500"
@@ -80,7 +80,7 @@ def test_reparse_point_moint_point():
     assert not attr.relative
 
 
-def test_reparse_point_symlink():
+def test_reparse_point_symlink() -> None:
     data = bytes.fromhex(
         "c000000058000000000000000000040040000000180000000c0000a038000000"
         "12001a00000012000000000043003a005c005400610072006700650074005c00"

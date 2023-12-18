@@ -1,5 +1,6 @@
 import io
 import struct
+from typing import BinaryIO
 from unittest.mock import Mock
 
 from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, c_ntfs
@@ -7,7 +8,7 @@ from dissect.ntfs.index import IndexEntry, Match, _cmp_filename, _cmp_ulong
 from dissect.ntfs.ntfs import NTFS
 
 
-def mock_filename_entry(filename):
+def mock_filename_entry(filename: str) -> IndexEntry:
     attribute = c_ntfs._FILE_NAME(
         FileNameLength=len(filename),
         FileName=filename,
@@ -23,7 +24,7 @@ def mock_filename_entry(filename):
     return IndexEntry(mock_index, io.BytesIO(data), 0)
 
 
-def mock_ulong_entry(value):
+def mock_ulong_entry(value: int) -> IndexEntry:
     header = c_ntfs._INDEX_ENTRY(
         Length=len(c_ntfs._INDEX_ENTRY) + 4,
         KeyLength=4,
@@ -35,7 +36,7 @@ def mock_ulong_entry(value):
     return IndexEntry(mock_index, io.BytesIO(data), 0)
 
 
-def test_cmp_filename():
+def test_cmp_filename() -> None:
     entry = mock_filename_entry("bbbb")
 
     assert _cmp_filename(entry, "CCCC") == Match.Greater
@@ -48,7 +49,7 @@ def test_cmp_filename():
     assert _cmp_filename(entry, "CONFIG") == Match.Less
 
 
-def test_cmp_ulong():
+def test_cmp_ulong() -> None:
     entry = mock_ulong_entry(100)
 
     assert _cmp_ulong(entry, 99) == Match.Less
@@ -56,7 +57,7 @@ def test_cmp_ulong():
     assert _cmp_ulong(entry, 101) == Match.Greater
 
 
-def test_index_lookup(ntfs_bin):
+def test_index_lookup(ntfs_bin: BinaryIO) -> None:
     fs = NTFS(ntfs_bin)
 
     root = fs.mft.get("Large Directory")
