@@ -1,4 +1,5 @@
 from io import BytesIO
+from typing import BinaryIO
 
 import pytest
 
@@ -6,7 +7,7 @@ from dissect.ntfs.exceptions import FileNotFoundError, NotADirectoryError
 from dissect.ntfs.ntfs import NTFS
 
 
-def test_ntfs(ntfs_bin):
+def test_ntfs(ntfs_bin: BinaryIO) -> None:
     fs = NTFS(ntfs_bin)
 
     assert fs.sector_size == 512
@@ -49,12 +50,12 @@ def test_ntfs(ntfs_bin):
     assert fs.mft.get("Directory/File 1.txt").full_path() == "Directory\\File 1.txt"
 
 
-def test_ntfs_large_sector(boot_2m_bin):
+def test_ntfs_large_sector(boot_2m_bin: BinaryIO) -> None:
     fs = NTFS(boot=boot_2m_bin)
     assert fs.cluster_size == 0x200000
 
 
-def test_ntfs_64k_sector():
+def test_ntfs_64k_sector() -> None:
     boot_sector = """
     eb52904e5446532020202000028000000000000000f800003f00ff0000080400
     0000000080008000ffef3b060000000000c00000000000000100000000000000
@@ -78,6 +79,6 @@ def test_ntfs_64k_sector():
     assert fs.cluster_size == 0x10000
 
 
-def test_fragmented_mft(ntfs_fragmented_mft_fh):
+def test_fragmented_mft(ntfs_fragmented_mft_fh: BinaryIO) -> None:
     fs = NTFS(ntfs_fragmented_mft_fh)
     assert len(fs.mft.fh.runlist) == 238
