@@ -1,4 +1,5 @@
 import io
+from typing import BinaryIO
 
 import pytest
 
@@ -8,7 +9,7 @@ from dissect.ntfs.mft import Mft, MftRecord
 from dissect.ntfs.ntfs import NTFS
 
 
-def test_mft(mft_bin):
+def test_mft(mft_bin: BinaryIO) -> None:
     fs = NTFS(mft=mft_bin)
 
     assert fs.mft
@@ -18,7 +19,7 @@ def test_mft(mft_bin):
         assert fs.mft.get(FILE_NUMBER_MFT).open()
 
 
-def test_mft_record_get_no_mft(mft_bin):
+def test_mft_record_get_no_mft(mft_bin: BinaryIO) -> None:
     fs = NTFS(mft=mft_bin)
 
     root = fs.mft.root
@@ -28,7 +29,7 @@ def test_mft_record_get_no_mft(mft_bin):
         root.get("$MFT")
 
 
-def test_mft_record():
+def test_mft_record() -> None:
     # Single MFT record of the $MFT file itself.
     data = bytes.fromhex(
         "46494c453000030051511000000000000100010038000100a001000000040000"

@@ -2,42 +2,48 @@ import csv
 import gzip
 import io
 import os
+from typing import BinaryIO, Iterator
 
 import pytest
 from dissect.util.stream import MappingStream
 
 
-def absolute_path(filename):
+def absolute_path(filename: str) -> str:
     return os.path.join(os.path.dirname(__file__), filename)
 
 
-def open_file_gz(name, mode="rb"):
+def open_file_gz(name: str, mode: str = "rb") -> Iterator[BinaryIO]:
     with gzip.GzipFile(absolute_path(name), mode) as f:
         yield f
 
 
 @pytest.fixture
-def ntfs_bin():
+def ntfs_bin() -> Iterator[BinaryIO]:
     yield from open_file_gz("data/ntfs.bin.gz")
 
 
 @pytest.fixture
-def mft_bin():
+def mft_bin() -> Iterator[BinaryIO]:
     yield from open_file_gz("data/mft.bin.gz")
 
 
 @pytest.fixture
-def sds_bin():
+def sds_bin() -> Iterator[BinaryIO]:
     yield from open_file_gz("data/sds.bin.gz")
 
 
 @pytest.fixture
-def boot_2m_bin():
+def sds_complex_bin() -> Iterator[BinaryIO]:
+    yield from open_file_gz("data/sds_complex.bin.gz")
+
+
+@pytest.fixture
+def boot_2m_bin() -> Iterator[BinaryIO]:
     yield from open_file_gz("data/boot_2m.bin.gz")
 
 
 @pytest.fixture
-def ntfs_fragmented_mft_fh():
+def ntfs_fragmented_mft_fh() -> Iterator[BinaryIO]:
     # Test data from https://github.com/msuhanov/ntfs-samples
     # This is from the file ntfs_extremely_fragmented_mft.raw which has, as the name implies, a heavily fragmented MFT
     # The entire file is way too large, so only take just enough data that we actually need to make dissect.ntfs happy

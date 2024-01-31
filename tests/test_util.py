@@ -3,7 +3,7 @@ from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE
 from dissect.ntfs.util import AttributeMap, apply_fixup
 
 
-def test_fixup():
+def test_fixup() -> None:
     buf = bytearray(
         b"FILE\x30\x00"
         + (b"\x00" * 42)
@@ -39,7 +39,7 @@ def test_fixup():
     assert fixed[2046:2048] == b"\xFC\x00"
 
 
-def test_attribute_map():
+def test_attribute_map() -> None:
     attr_map = AttributeMap()
     assert len(attr_map) == 0
     assert attr_map.STANDARD_INFORMATION == []
