@@ -47,6 +47,8 @@ class Index:
         self.record = record
         self.name = name
 
+        self.index_buffer = lru_cache(128)(self.index_buffer)
+
         self.root = IndexRoot(self, self.record.open(name, ATTRIBUTE_TYPE_CODE.INDEX_ROOT))
 
         if self.record.ntfs and self.record.ntfs.cluster_size <= self.root.bytes_per_index_buffer:
@@ -62,7 +64,6 @@ class Index:
     def __iter__(self) -> Iterator[IndexEntry]:
         return self.entries()
 
-    @lru_cache(128)
     def index_buffer(self, vcn: int) -> IndexBuffer:
         """Return the :class:`IndexBuffer` at the specified cluster number.
 
