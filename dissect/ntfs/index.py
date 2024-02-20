@@ -47,8 +47,6 @@ class Index:
         self.record = record
         self.name = name
 
-        self.index_buffer = lru_cache(128)(self.index_buffer)
-
         self.root = IndexRoot(self, self.record.open(name, ATTRIBUTE_TYPE_CODE.INDEX_ROOT))
 
         if self.record.ntfs and self.record.ntfs.cluster_size <= self.root.bytes_per_index_buffer:
@@ -60,6 +58,8 @@ class Index:
             self._index_stream = self.record.open(self.name, ATTRIBUTE_TYPE_CODE.INDEX_ALLOCATION)
         except FileNotFoundError:
             self._index_stream = None
+
+        self.index_buffer = lru_cache(128)(self.index_buffer)
 
     def __iter__(self) -> Iterator[IndexEntry]:
         return self.entries()

@@ -46,6 +46,7 @@ class Mft:
     def __init__(self, fh: BinaryIO, ntfs: Optional[NTFS] = None):
         self.fh = fh
         self.ntfs = ntfs
+
         self.get = lru_cache(4096)(self.get)
 
     def __call__(self, ref, *args, **kwargs) -> MftRecord:
