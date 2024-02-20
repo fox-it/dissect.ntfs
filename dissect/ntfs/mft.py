@@ -47,6 +47,8 @@ class Mft:
         self.fh = fh
         self.ntfs = ntfs
 
+        self.get = lru_cache(4096)(self.get)
+
     def __call__(self, ref, *args, **kwargs) -> MftRecord:
         return self.get(ref, *args, **kwargs)
 
@@ -89,7 +91,6 @@ class Mft:
 
         return node
 
-    @lru_cache(4096)
     def get(self, ref: Union[int, str, Instance], root: Optional[MftRecord] = None) -> MftRecord:
         """Retrieve an MFT record using a variety of methods.
 

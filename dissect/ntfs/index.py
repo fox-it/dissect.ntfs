@@ -59,10 +59,11 @@ class Index:
         except FileNotFoundError:
             self._index_stream = None
 
+        self.index_buffer = lru_cache(128)(self.index_buffer)
+
     def __iter__(self) -> Iterator[IndexEntry]:
         return self.entries()
 
-    @lru_cache(128)
     def index_buffer(self, vcn: int) -> IndexBuffer:
         """Return the :class:`IndexBuffer` at the specified cluster number.
 
