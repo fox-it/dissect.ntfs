@@ -124,11 +124,13 @@ class Mft:
         """Yield all valid MFT records, regardless if they're allocated or not.
 
         Args:
-            start: The starting segment number.
-            end: The ending segment number.
+            start: The starting segment number. Use ``-1`` to start from the last segment.
+            end: The ending segment number. Use ``-1`` to end with the last segment.
         """
         record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
-        end = (self.get(FILE_NUMBER_MFT).size() // record_size) if end == -1 else end
+        last_segment = self.get(FILE_NUMBER_MFT).size() // record_size
+        start = last_segment if start == -1 else start
+        end = last_segment if end == -1 else end
         step = 1 if start <= end else -1
 
         for segment in range(start, end + step, step):
