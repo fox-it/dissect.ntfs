@@ -79,3 +79,18 @@ def test_mft_record() -> None:
     record = mft.get(0)
     assert record.filename == "$MFT"
     assert record.filenames() == ["$MFT"]
+
+
+def test_mft_records_segment_number(mft_bin: BinaryIO) -> None:
+    fs = NTFS(mft=mft_bin)
+    assert fs.mft
+
+    records_forward = list(fs.mft.segments(0, 4))
+    assert len(records_forward) == 5
+    assert records_forward[0].filename == "$MFT"
+    assert records_forward[4].filename == "$AttrDef"
+
+    records_backwards = list(fs.mft.segments(4, 0))
+    assert len(records_backwards) == 5
+    assert records_backwards[0].filename == "$AttrDef"
+    assert records_backwards[4].filename == "$MFT"

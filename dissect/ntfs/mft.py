@@ -120,12 +120,20 @@ class Mft:
         else:
             raise TypeError(f"Invalid MFT reference: {ref!r}")
 
-    def segments(self) -> Iterator[MftRecord]:
-        """Yield all valid MFT records, regardless if they're allocated or not."""
-        record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
-        mft_size = self.get(FILE_NUMBER_MFT).size()
+    def segments(self, start: int = 0, end: int = -1) -> Iterator[MftRecord]:
+        """Yield all valid MFT records, regardless if they're allocated or not.
 
-        for segment in range(mft_size // record_size):
+        Args:
+            start: The starting segment number. Use ``-1`` to start from the last segment.
+            end: The ending segment number. Use ``-1`` to end with the last segment.
+        """
+        record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
+        last_segment = self.get(FILE_NUMBER_MFT).size() // record_size
+        start = last_segment if start == -1 else start
+        end = last_segment if end == -1 else end
+        step = 1 if start <= end else -1
+
+        for segment in range(start, end + step, step):
             try:
                 yield self.get(segment)
             except Error:
