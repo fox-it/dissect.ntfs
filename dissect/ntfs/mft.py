@@ -46,9 +46,6 @@ class Mft:
     def __init__(self, fh: BinaryIO, ntfs: Optional[NTFS] = None):
         self.fh = fh
         self.ntfs = ntfs
-        self.record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
-        self.mft_size = self.get(FILE_NUMBER_MFT).size()
-        self.last_segment_number = self.mft_size // self.record_size
 
         self.get = lru_cache(4096)(self.get)
 
@@ -113,7 +110,9 @@ class Mft:
             ref = segment_reference(ref)
 
         if isinstance(ref, int):
-            record = MftRecord.from_fh(self.fh, ref * self.record_size, ntfs=self.ntfs)
+            record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
+
+            record = MftRecord.from_fh(self.fh, ref * record_size, ntfs=self.ntfs)
             record.segment = ref
             return record
         elif isinstance(ref, str):
@@ -123,30 +122,10 @@ class Mft:
 
     def segments(self) -> Iterator[MftRecord]:
         """Yield all valid MFT records, regardless if they're allocated or not."""
+        record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
+        mft_size = self.get(FILE_NUMBER_MFT).size()
 
-        for segment in range(self.last_segment_number):
-            try:
-                yield self.get(segment)
-            except Error:
-                continue
-            except EOFError:
-                break
-
-    def segments_by_range(self, start: int, end: int) -> Iterator[MftRecord]:
-        """Yield all valid MFT records within the specified segment range, regardless if they're allocated or not.
-
-        Args:
-            start (int): The starting segment number.
-            end (int): The ending segment number.
-
-        Raises:
-            Error: If the start segment number is higher than the end segment number.
-        """
-
-        if start > end:
-            raise Error("The start segment cannot be higher than the end segment number")
-
-        for segment in range(start, end + 1):
+        for segment in range(mft_size // record_size):
             try:
                 yield self.get(segment)
             except Error:

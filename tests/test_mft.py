@@ -79,16 +79,3 @@ def test_mft_record() -> None:
     record = mft.get(0)
     assert record.filename == "$MFT"
     assert record.filenames() == ["$MFT"]
-
-
-def test_mft_records_segment_number(mft_bin: BinaryIO) -> None:
-    fs = NTFS(mft=mft_bin)
-
-    assert fs.mft
-    assert len(list(fs.mft.segments())) == 37
-
-    records = list(fs.mft.segments_by_range(0, 4))
-
-    assert len(records) == 5
-    assert records[0].filename == "$MFT"
-    assert records[4].filename == "$AttrDef"
