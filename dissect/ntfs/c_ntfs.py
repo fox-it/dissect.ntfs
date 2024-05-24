@@ -1,6 +1,6 @@
 import struct
 
-from dissect import cstruct
+from dissect.cstruct import cstruct
 
 ntfs_def = """
 /* ================ Generic stuff ================ */
@@ -552,8 +552,7 @@ typedef struct {
 } USN_RECORD_V4;
 """
 
-c_ntfs = cstruct.cstruct()
-c_ntfs.load(ntfs_def)
+c_ntfs = cstruct().load(ntfs_def)
 
 # Useful enums and flags
 ATTRIBUTE_TYPE_CODE = c_ntfs.ATTRIBUTE_TYPE_CODE
@@ -614,7 +613,7 @@ INDEX_ENTRY_NODE = 0x01
 INDEX_ENTRY_END = 0x02
 
 
-def segment_reference(reference: cstruct.Structure) -> int:
+def segment_reference(reference: c_ntfs._MFT_SEGMENT_REFERENCE) -> int:
     """Helper to calculate the complete segment number from a cstruct MFT segment reference.
 
     Args:
