@@ -614,7 +614,7 @@ INDEX_ENTRY_NODE = 0x01
 INDEX_ENTRY_END = 0x02
 
 
-def segment_reference(reference: cstruct.Instance) -> int:
+def segment_reference(reference: cstruct.Structure) -> int:
     """Helper to calculate the complete segment number from a cstruct MFT segment reference.
 
     Args:

@@ -4,7 +4,7 @@ import io
 from typing import BinaryIO, Iterator
 from uuid import UUID
 
-from dissect.cstruct import Instance
+from dissect.cstruct import Structure
 from dissect.util.sid import read_sid
 
 from dissect.ntfs.c_ntfs import ACE_OBJECT_FLAGS, ACE_TYPE, c_ntfs
@@ -39,7 +39,7 @@ class Secure:
         if not hasattr(self.sds, "size"):
             self.sds.size = self.sds.seek(0, io.SEEK_END)
 
-    def _iter_entries(self, offset: int = 0) -> Iterator[Instance]:
+    def _iter_entries(self, offset: int = 0) -> Iterator[Structure]:
         """Iterate over all SDS entries, optionally starting from a specific offset.
 
         Args:

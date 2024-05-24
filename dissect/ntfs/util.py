@@ -4,7 +4,7 @@ import struct
 from collections import UserDict
 from typing import TYPE_CHECKING, Any, BinaryIO, Optional, Union
 
-from dissect.cstruct import EnumInstance, Instance
+from dissect.cstruct import Enum, Structure
 from dissect.util.stream import RunlistStream
 
 from dissect.ntfs.c_ntfs import (
@@ -44,12 +44,12 @@ class AttributeMap(UserDict):
         return super().__getattribute__(attr)
 
     def __getitem__(self, item: Union[ATTRIBUTE_TYPE_CODE, int]) -> AttributeCollection:
-        if isinstance(item, EnumInstance):
+        if isinstance(item, Enum):
             item = item.value
         return self.data.get(item, AttributeCollection())
 
     def __contains__(self, key: Union[ATTRIBUTE_TYPE_CODE, int]) -> bool:
-        if isinstance(key, EnumInstance):
+        if isinstance(key, Enum):
             key = key.value
         return super().__contains__(key)
 
@@ -234,7 +234,7 @@ def ensure_volume(ntfs: NTFS) -> None:
         raise VolumeNotAvailableError()
 
 
-def get_full_path(mft: Mft, name: str, parent: Instance, seen: set[str] = None) -> str:
+def get_full_path(mft: Mft, name: str, parent: Structure, seen: set[str] = None) -> str:
     """Walk up parent file references to construct a full path.
 
     Args:
