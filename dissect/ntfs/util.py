@@ -4,7 +4,7 @@ import struct
 from collections import UserDict
 from typing import TYPE_CHECKING, Any, BinaryIO, Optional, Union
 
-from dissect.cstruct import EnumInstance, Instance
+from dissect.cstruct import Enum
 from dissect.util.stream import RunlistStream
 
 from dissect.ntfs.c_ntfs import (
@@ -13,6 +13,7 @@ from dissect.ntfs.c_ntfs import (
     FILE_NUMBER_ROOT,
     SECTOR_SHIFT,
     SECTOR_SIZE,
+    c_ntfs,
     segment_reference,
 )
 from dissect.ntfs.exceptions import FilenameNotAvailableError, VolumeNotAvailableError
@@ -38,18 +39,18 @@ class AttributeMap(UserDict):
     """  # noqa: E501
 
     def __getattr__(self, attr: str) -> AttributeCollection:
-        if attr in ATTRIBUTE_TYPE_CODE:
+        if attr in ATTRIBUTE_TYPE_CODE.__members__:
             return self[ATTRIBUTE_TYPE_CODE[attr]]
 
         return super().__getattribute__(attr)
 
     def __getitem__(self, item: Union[ATTRIBUTE_TYPE_CODE, int]) -> AttributeCollection:
-        if isinstance(item, EnumInstance):
+        if isinstance(item, Enum):
             item = item.value
         return self.data.get(item, AttributeCollection())
 
     def __contains__(self, key: Union[ATTRIBUTE_TYPE_CODE, int]) -> bool:
-        if isinstance(key, EnumInstance):
+        if isinstance(key, Enum):
             key = key.value
         return super().__contains__(key)
 
@@ -234,7 +235,7 @@ def ensure_volume(ntfs: NTFS) -> None:
         raise VolumeNotAvailableError()
 
 
-def get_full_path(mft: Mft, name: str, parent: Instance, seen: set[str] = None) -> str:
+def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, seen: set[str] = None) -> str:
     """Walk up parent file references to construct a full path.
 
     Args:

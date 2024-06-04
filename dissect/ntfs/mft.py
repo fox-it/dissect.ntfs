@@ -6,8 +6,6 @@ from io import BytesIO
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional, Union
 
-from dissect.cstruct import Instance
-
 from dissect.ntfs.attr import Attribute, AttributeHeader
 from dissect.ntfs.c_ntfs import (
     ATTRIBUTE_TYPE_CODE,
@@ -91,11 +89,11 @@ class Mft:
 
         return node
 
-    def get(self, ref: Union[int, str, Instance], root: Optional[MftRecord] = None) -> MftRecord:
+    def get(self, ref: Union[int, str, c_ntfs._MFT_SEGMENT_REFERENCE], root: Optional[MftRecord] = None) -> MftRecord:
         """Retrieve an MFT record using a variety of methods.
 
         Supported references are:
-            - ``_MFT_SEGMENT_REFERENCE`` cstruct instance
+            - ``_MFT_SEGMENT_REFERENCE`` cstruct structure
             - integer segment number
             - string file path
 
@@ -106,7 +104,7 @@ class Mft:
         Raises:
             TypeError: If the reference is of an unsupported type.
         """
-        if isinstance(ref, Instance) and ref._type == c_ntfs._MFT_SEGMENT_REFERENCE:
+        if isinstance(ref, c_ntfs._MFT_SEGMENT_REFERENCE):
             ref = segment_reference(ref)
 
         if isinstance(ref, int):
@@ -153,7 +151,7 @@ class MftRecord:
         self.segment: Optional[int] = None
         self.offset: Optional[int] = None
         self.data: Optional[bytes] = None
-        self.header: Optional[Instance] = None
+        self.header: Optional[c_ntfs._FILE_RECORD_SEGMENT_HEADER] = None
 
     def __repr__(self) -> str:
         return f"<MftRecord {self.segment}#{self.header.SequenceNumber}>"
