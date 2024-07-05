@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 from typing import BinaryIO, Iterator
+from functools import lru_cache
 from uuid import UUID
 
 from dissect.util.sid import read_sid
@@ -24,6 +25,8 @@ class Secure:
         self.record = record
         self.sds = None
         self.sii = None
+
+        self.lookup = lru_cache(4096)(self.lookup)
 
         if record:
             self.sds = record.open("$SDS")
