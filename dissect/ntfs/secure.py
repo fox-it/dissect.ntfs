@@ -40,7 +40,6 @@ class Secure:
             self.sds.size = self.sds.seek(0, io.SEEK_END)
 
         self.lookup = lru_cache(4096)(self.lookup)
-        self._iter_entries = lru_cache(4096)(self._iter_entries)
 
     def _iter_entries(self, offset: int = 0) -> Iterator[c_ntfs._SECURITY_DESCRIPTOR_HEADER]:
         """Iterate over all SDS entries, optionally starting from a specific offset.
