@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import io
-from typing import BinaryIO, Iterator
 from functools import lru_cache
+from typing import BinaryIO, Iterator
 from uuid import UUID
 
 from dissect.util.sid import read_sid
@@ -26,8 +26,6 @@ class Secure:
         self.sds = None
         self.sii = None
 
-        self.lookup = lru_cache(4096)(self.lookup)
-
         if record:
             self.sds = record.open("$SDS")
             self.sii = record.index("$SII")
@@ -40,6 +38,9 @@ class Secure:
         # Hack for file-like objects that don't have a .size attribute
         if not hasattr(self.sds, "size"):
             self.sds.size = self.sds.seek(0, io.SEEK_END)
+
+        self.lookup = lru_cache(4096)(self.lookup)
+        self._iter_entries = lru_cache(4096)(self._iter_entries)
 
     def _iter_entries(self, offset: int = 0) -> Iterator[c_ntfs._SECURITY_DESCRIPTOR_HEADER]:
         """Iterate over all SDS entries, optionally starting from a specific offset.
