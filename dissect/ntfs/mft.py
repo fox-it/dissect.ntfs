@@ -4,7 +4,7 @@ import ntpath
 from functools import cached_property, lru_cache
 from io import BytesIO
 from operator import itemgetter
-from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional, Union
+from typing import TYPE_CHECKING, BinaryIO
 
 from dissect.ntfs.attr import Attribute, AttributeHeader
 from dissect.ntfs.c_ntfs import (
@@ -30,6 +30,8 @@ from dissect.ntfs.index import Index, IndexEntry
 from dissect.ntfs.util import AttributeCollection, AttributeMap, apply_fixup
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from dissect.ntfs.ntfs import NTFS
 
 
@@ -41,13 +43,13 @@ class Mft:
         ntfs: An optional NTFS class instance.
     """
 
-    def __init__(self, fh: BinaryIO, ntfs: Optional[NTFS] = None):
+    def __init__(self, fh: BinaryIO, ntfs: NTFS | None = None):
         self.fh = fh
         self.ntfs = ntfs
 
         self.get = lru_cache(4096)(self.get)
 
-    def __call__(self, ref, *args, **kwargs) -> MftRecord:
+    def __call__(self, ref: int | str | c_ntfs._MFT_SEGMENT_REFERENCE, *args, **kwargs) -> MftRecord:
         return self.get(ref, *args, **kwargs)
 
     @cached_property
@@ -55,7 +57,7 @@ class Mft:
         """Return the root directory MFT record."""
         return self.get(FILE_NUMBER_ROOT)
 
-    def _get_path(self, path: str, root: Optional[MftRecord] = None) -> MftRecord:
+    def _get_path(self, path: str, root: MftRecord | None = None) -> MftRecord:
         """Resolve a file path to the correct MFT record.
 
         Args:
@@ -89,7 +91,7 @@ class Mft:
 
         return node
 
-    def get(self, ref: Union[int, str, c_ntfs._MFT_SEGMENT_REFERENCE], root: Optional[MftRecord] = None) -> MftRecord:
+    def get(self, ref: int | str | c_ntfs._MFT_SEGMENT_REFERENCE, root: MftRecord | None = None) -> MftRecord:
         """Retrieve an MFT record using a variety of methods.
 
         Supported references are:
@@ -113,10 +115,11 @@ class Mft:
             record = MftRecord.from_fh(self.fh, ref * record_size, ntfs=self.ntfs)
             record.segment = ref
             return record
-        elif isinstance(ref, str):
+
+        if isinstance(ref, str):
             return self._get_path(ref, root)
-        else:
-            raise TypeError(f"Invalid MFT reference: {ref!r}")
+
+        raise TypeError(f"Invalid MFT reference: {ref!r}")
 
     def segments(self, start: int = 0, end: int = -1) -> Iterator[MftRecord]:
         """Yield all valid MFT records, regardless if they're allocated or not.
@@ -134,7 +137,7 @@ class Mft:
         for segment in range(start, end + step, step):
             try:
                 yield self.get(segment)
-            except Error:
+            except Error:  # noqa: PERF203
                 continue
             except EOFError:
                 break
@@ -147,16 +150,16 @@ class MftRecord:
     """
 
     def __init__(self):
-        self.ntfs: Optional[NTFS] = None
-        self.segment: Optional[int] = None
-        self.offset: Optional[int] = None
-        self.data: Optional[bytes] = None
-        self.header: Optional[c_ntfs._FILE_RECORD_SEGMENT_HEADER] = None
+        self.ntfs: NTFS | None = None
+        self.segment: int | None = None
+        self.offset: int | None = None
+        self.data: bytes | None = None
+        self.header: c_ntfs._FILE_RECORD_SEGMENT_HEADER | None = None
 
     def __repr__(self) -> str:
         return f"<MftRecord {self.segment}#{self.header.SequenceNumber}>"
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, MftRecord):
             return self.segment == other.segment and self.header.SequenceNumber == other.header.SequenceNumber
         return False
@@ -164,7 +167,7 @@ class MftRecord:
     __hash__ = object.__hash__
 
     @classmethod
-    def from_fh(cls, fh: BinaryIO, offset: int, ntfs: Optional[NTFS] = None) -> MftRecord:
+    def from_fh(cls, fh: BinaryIO, offset: int, ntfs: NTFS | None = None) -> MftRecord:
         """Parse an MFT record from a file-like object.
 
         Args:
@@ -182,7 +185,7 @@ class MftRecord:
         return obj
 
     @classmethod
-    def from_bytes(cls, data: bytes, ntfs: Optional[NTFS] = None) -> MftRecord:
+    def from_bytes(cls, data: bytes, ntfs: NTFS | None = None) -> MftRecord:
         """Parse an MFT record from bytes.
 
         Args:
@@ -212,7 +215,7 @@ class MftRecord:
             MftNotAvailableError: If no MFT is available.
         """
         if not self.ntfs or not self.ntfs.mft:
-            raise MftNotAvailableError()
+            raise MftNotAvailableError
         return self.ntfs.mft.get(path, root=self)
 
     @cached_property
@@ -264,7 +267,7 @@ class MftRecord:
         return any(attr.header.resident for attr in self.attributes[ATTRIBUTE_TYPE_CODE.DATA])
 
     @cached_property
-    def filename(self) -> Optional[str]:
+    def filename(self) -> str | None:
         """Return the first file name, or ``None`` if this record has no file names."""
         filenames = self.filenames()
         return filenames[0] if filenames else None
@@ -282,7 +285,7 @@ class MftRecord:
             result.append((attr.flags, attr.file_name))
         return [item[1] for item in sorted(result, key=itemgetter(0))]
 
-    def full_path(self, ignore_dos: bool = False) -> Optional[str]:
+    def full_path(self, ignore_dos: bool = False) -> str | None:
         """Return the first full path, or ``None`` if this record has no file names.
 
         Args:
@@ -353,7 +356,7 @@ class MftRecord:
             raise NotAReparsePointError(f"{self!r} is not a reparse point")
 
         if not self.ntfs or not self.ntfs.mft:
-            raise MftNotAvailableError()
+            raise MftNotAvailableError
 
         reparse_point = self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT]
 
@@ -442,7 +445,7 @@ class MftRecord:
         """
         return Index(self, name)
 
-    def iterdir(self, dereference: bool = False, ignore_dos: bool = False) -> Iterator[Union[IndexEntry, MftRecord]]:
+    def iterdir(self, dereference: bool = False, ignore_dos: bool = False) -> Iterator[IndexEntry | MftRecord]:
         """Yield directory entries of this record.
 
         Args:
@@ -460,7 +463,7 @@ class MftRecord:
                 continue
             yield entry.dereference() if dereference else entry
 
-    def listdir(self, dereference: bool = False, ignore_dos: bool = False) -> dict[str, Union[IndexEntry, MftRecord]]:
+    def listdir(self, dereference: bool = False, ignore_dos: bool = False) -> dict[str, IndexEntry | MftRecord]:
         """Return a dictionary of the directory entries of this record.
 
         Args:

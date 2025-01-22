@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from functools import cached_property
-from typing import BinaryIO, Iterator, Optional
+from typing import TYPE_CHECKING, BinaryIO
 
 from dissect.ntfs.c_ntfs import (
     ATTRIBUTE_TYPE_CODE,
@@ -16,6 +18,9 @@ from dissect.ntfs.exceptions import Error, FileNotFoundError, VolumeNotAvailable
 from dissect.ntfs.mft import Mft, MftRecord
 from dissect.ntfs.secure import Secure
 from dissect.ntfs.usnjrnl import UsnJrnl
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 class NTFS:
@@ -36,11 +41,11 @@ class NTFS:
 
     def __init__(
         self,
-        fh: Optional[BinaryIO] = None,
-        boot: Optional[BinaryIO] = None,
-        mft: Optional[BinaryIO] = None,
-        usnjrnl: Optional[BinaryIO] = None,
-        sds: Optional[BinaryIO] = None,
+        fh: BinaryIO | None = None,
+        boot: BinaryIO | None = None,
+        mft: BinaryIO | None = None,
+        usnjrnl: BinaryIO | None = None,
+        sds: BinaryIO | None = None,
     ):
         self.fh = fh
 
@@ -130,11 +135,11 @@ class NTFS:
                 pass
 
     @cached_property
-    def serial(self) -> Optional[int]:
+    def serial(self) -> int | None:
         return self.boot_sector.SerialNumber if self.boot_sector else None
 
     @cached_property
-    def volume_name(self) -> Optional[str]:
+    def volume_name(self) -> str | None:
         if not self.mft:
             return None
 

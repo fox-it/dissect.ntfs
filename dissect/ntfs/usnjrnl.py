@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 from dissect.util.stream import RunlistStream
 from dissect.util.ts import wintimestamp
 
 from dissect.ntfs.c_ntfs import USN_PAGE_SIZE, c_ntfs, segment_reference
 from dissect.ntfs.exceptions import Error
-from dissect.ntfs.mft import MftRecord
 from dissect.ntfs.util import ts_to_ns
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from datetime import datetime
+
+    from dissect.ntfs.mft import MftRecord
     from dissect.ntfs.ntfs import NTFS
 
 
@@ -24,7 +26,7 @@ class UsnJrnl:
         ntfs: An optional :class:`~dissect.ntfs.ntfs.NTFS` class instance, used for resolving file paths.
     """
 
-    def __init__(self, fh: BinaryIO, ntfs: Optional[NTFS] = None):
+    def __init__(self, fh: BinaryIO, ntfs: NTFS | None = None):
         self.fh = fh
         self.ntfs = ntfs
 
@@ -105,13 +107,13 @@ class UsnRecord:
         return getattr(self.record, attr)
 
     @cached_property
-    def file(self) -> Optional[MftRecord]:
+    def file(self) -> MftRecord | None:
         if self.usnjrnl.ntfs and self.usnjrnl.ntfs.mft:
             return self.usnjrnl.ntfs.mft(self.record.FileReferenceNumber)
         return None
 
     @cached_property
-    def parent(self) -> Optional[MftRecord]:
+    def parent(self) -> MftRecord | None:
         if self.usnjrnl.ntfs and self.usnjrnl.ntfs.mft:
             return self.usnjrnl.ntfs.mft(self.record.ParentFileReferenceNumber)
         return None
@@ -133,12 +135,10 @@ class UsnRecord:
 
         ref = segment_reference(self.record.ParentFileReferenceNumber)
         if parent is None:
-            parent_path = (
-                f"<unavailable_reference_0x{ref:x}" f"#{self.record.ParentFileReferenceNumber.SequenceNumber}>"
-            )
+            parent_path = f"<unavailable_reference_0x{ref:x}#{self.record.ParentFileReferenceNumber.SequenceNumber}>"
         elif parent.header.SequenceNumber == self.record.ParentFileReferenceNumber.SequenceNumber:
             parent_path = parent.full_path()
         else:
-            parent_path = f"<broken_reference_0x{ref:x}" f"#{self.record.ParentFileReferenceNumber.SequenceNumber}>"
+            parent_path = f"<broken_reference_0x{ref:x}#{self.record.ParentFileReferenceNumber.SequenceNumber}>"
 
-        return "\\".join([parent_path, self.filename])
+        return f"{parent_path}\\{self.filename}"

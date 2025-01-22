@@ -1,15 +1,20 @@
+from __future__ import annotations
+
 import csv
 import gzip
 import io
-import os
-from typing import BinaryIO, Iterator
+from pathlib import Path
+from typing import TYPE_CHECKING, BinaryIO
 
 import pytest
 from dissect.util.stream import MappingStream
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
-def absolute_path(filename: str) -> str:
-    return os.path.join(os.path.dirname(__file__), filename)
+
+def absolute_path(filename: str) -> Path:
+    return Path(__file__).parent / filename
 
 
 def open_file_gz(name: str, mode: str = "rb") -> Iterator[BinaryIO]:
@@ -43,7 +48,7 @@ def boot_2m_bin() -> Iterator[BinaryIO]:
 
 
 @pytest.fixture
-def ntfs_fragmented_mft_fh() -> Iterator[BinaryIO]:
+def ntfs_fragmented_mft_fh() -> BinaryIO:
     # Test data from https://github.com/msuhanov/ntfs-samples
     # This is from the file ntfs_extremely_fragmented_mft.raw which has, as the name implies, a heavily fragmented MFT
     # The entire file is way too large, so only take just enough data that we actually need to make dissect.ntfs happy
@@ -55,4 +60,4 @@ def ntfs_fragmented_mft_fh() -> Iterator[BinaryIO]:
             buf = bytes.fromhex(data)
             stream.add(int(offset), len(buf), io.BytesIO(buf), 0)
 
-    yield stream
+    return stream

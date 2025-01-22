@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import BinaryIO
 
 import pytest
@@ -58,5 +60,5 @@ def test_secure_complex_acl(sds_complex_bin: BinaryIO) -> None:
 
 
 def test_secure_fail() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Either record or SDS stream is required"):
         Secure()

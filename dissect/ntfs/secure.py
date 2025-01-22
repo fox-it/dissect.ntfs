@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import io
 from functools import lru_cache
-from typing import BinaryIO, Iterator
+from typing import TYPE_CHECKING, BinaryIO
 from uuid import UUID
 
 from dissect.util.sid import read_sid
 
 from dissect.ntfs.c_ntfs import ACE_OBJECT_FLAGS, ACE_TYPE, c_ntfs
-from dissect.ntfs.mft import MftRecord
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from dissect.ntfs.mft import MftRecord
 
 
 class Secure:
@@ -21,7 +25,7 @@ class Secure:
         sds: A file-like object of the ``$SDS`` stream, used when opening from separate system files.
     """
 
-    def __init__(self, record: MftRecord = None, sds: BinaryIO = None):
+    def __init__(self, record: MftRecord = None, sds: BinaryIO | None = None):
         self.record = record
         self.sds = None
         self.sii = None
@@ -187,18 +191,17 @@ class ACE:
     def __repr__(self) -> str:
         if self.is_standard_ace:
             return f"<{self.header.AceType.name} mask=0x{self.mask:x} sid={self.sid}>"
-        elif self.is_compound_ace:
+        if self.is_compound_ace:
             return (
                 f"<{self.header.AceType.name} mask=0x{self.mask:x} type={self.compound_type.name}"
                 f" server_sid={self.server_sid} client_sid={self.sid}>"
             )
-        elif self.is_object_ace:
+        if self.is_object_ace:
             return (
                 f"<{self.header.AceType.name} mask=0x{self.mask:x} flags={self.flags} object_type={self.object_type}"
                 f" inherited_object_type={self.inherited_object_type} sid={self.sid}>"
             )
-        else:
-            return f"<ACE type={self.header.AceType} flags={self.header.AceFlags} size={self.header.AceSize}>"
+        return f"<ACE type={self.header.AceType} flags={self.header.AceFlags} size={self.header.AceSize}>"
 
     @property
     def type(self) -> ACE_TYPE:

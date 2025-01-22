@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, BinaryIO, Iterator, Optional
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 from dissect.util.stream import RangeStream, RunlistStream
 from dissect.util.ts import wintimestamp
@@ -18,6 +17,9 @@ from dissect.ntfs.exceptions import MftNotAvailableError, VolumeNotAvailableErro
 from dissect.ntfs.util import ensure_volume, get_full_path, ts_to_ns
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from datetime import datetime
+
     from dissect.ntfs.mft import MftRecord
 
 
@@ -31,9 +33,9 @@ class Attribute:
         header: The AttributeHeader for this Attribute.
     """
 
-    __slots__ = ("record", "header", "attribute")
+    __slots__ = ("attribute", "header", "record")
 
-    def __init__(self, header: AttributeHeader, record: Optional[MftRecord] = None):
+    def __init__(self, header: AttributeHeader, record: MftRecord | None = None):
         self.header = header
         self.record = record
         self.attribute = None
@@ -52,7 +54,7 @@ class Attribute:
         return f"<${self.header.type.name} name={self.header.name}>"
 
     @classmethod
-    def from_fh(cls, fh: BinaryIO, record: Optional[MftRecord] = None) -> Attribute:
+    def from_fh(cls, fh: BinaryIO, record: MftRecord | None = None) -> Attribute:
         """Parse an attribute from a file-like object.
 
         Args:
@@ -62,7 +64,7 @@ class Attribute:
         return cls(AttributeHeader(fh, 0, record), record)
 
     @classmethod
-    def from_bytes(cls, data: bytes, record: Optional[MftRecord] = None) -> Attribute:
+    def from_bytes(cls, data: bytes, record: MftRecord | None = None) -> Attribute:
         """Parse an attribute from bytes.
 
         Args:
@@ -120,9 +122,9 @@ class AttributeHeader:
         offset: The offset in the file-like object to parse an attribute header from.
     """
 
-    __slots__ = ("record", "fh", "offset", "header")
+    __slots__ = ("fh", "header", "offset", "record")
 
-    def __init__(self, fh: BinaryIO, offset: int, record: Optional[MftRecord] = None):
+    def __init__(self, fh: BinaryIO, offset: int, record: MftRecord | None = None):
         self.fh = fh
         self.offset = offset
         self.record = record
@@ -134,7 +136,7 @@ class AttributeHeader:
         return f"<${self.type.name} size={self.size}>"
 
     @classmethod
-    def from_bytes(cls, data: bytes, record: Optional[MftRecord] = None) -> AttributeHeader:
+    def from_bytes(cls, data: bytes, record: MftRecord | None = None) -> AttributeHeader:
         """Parse an attribute header from bytes.
 
         Args:
@@ -175,22 +177,22 @@ class AttributeHeader:
         return self.header.Form.Resident.ValueLength if self.resident else self.header.Form.Nonresident.FileSize
 
     @property
-    def allocated_size(self) -> Optional[int]:
+    def allocated_size(self) -> int | None:
         """Return the allocated size if non-resident, else None."""
         return self.header.Form.Nonresident.AllocatedLength if not self.resident else None
 
     @property
-    def lowest_vcn(self) -> Optional[int]:
+    def lowest_vcn(self) -> int | None:
         """Return the lowest VCN if non-resident, else None."""
         return self.header.Form.Nonresident.LowestVcn if not self.resident else None
 
     @property
-    def highest_vcn(self) -> Optional[int]:
+    def highest_vcn(self) -> int | None:
         """Return the highest VCN if non-resident, else None."""
         return self.header.Form.Nonresident.HighestVcn if not self.resident else None
 
     @property
-    def compression_unit(self) -> Optional[int]:
+    def compression_unit(self) -> int | None:
         """Return the compression unit if non-resident, else None."""
         return self.header.Form.Nonresident.CompressionUnit if not self.resident else None
 
@@ -242,16 +244,16 @@ class AttributeHeader:
                 self.offset + self.header.Form.Resident.ValueOffset,
                 self.size,
             )
-        else:
-            ntfs = self.record.ntfs if self.record else None
-            ensure_volume(ntfs)
 
-            return RunlistStream(
-                ntfs.fh,
-                self.dataruns(),
-                self.size,
-                ntfs.cluster_size,
-            )
+        ntfs = self.record.ntfs if self.record else None
+        ensure_volume(ntfs)
+
+        return RunlistStream(
+            ntfs.fh,
+            self.dataruns(),
+            self.size,
+            ntfs.cluster_size,
+        )
 
     def data(self) -> bytes:
         """Read and return all the data of this attribute.
@@ -272,13 +274,11 @@ class AttributeRecord:
 
     __slots__ = ("record",)
 
-    def __init__(self, fh: BinaryIO, record: Optional[MftRecord] = None):
+    def __init__(self, fh: BinaryIO, record: MftRecord | None = None):
         self.record = record
 
     @classmethod
-    def from_fh(
-        cls, fh: BinaryIO, attr_type: ATTRIBUTE_TYPE_CODE, record: Optional[MftRecord] = None
-    ) -> AttributeRecord:
+    def from_fh(cls, fh: BinaryIO, attr_type: ATTRIBUTE_TYPE_CODE, record: MftRecord | None = None) -> AttributeRecord:
         """Parse an attribute from a file-like object.
 
         Selects a more specific :class:`AttributeRecord` class if one is available for the given attribute type.
@@ -296,7 +296,7 @@ class AttributeList(AttributeRecord):
 
     __slots__ = ("entries",)
 
-    def __init__(self, fh: BinaryIO, record: Optional[MftRecord] = None):
+    def __init__(self, fh: BinaryIO, record: MftRecord | None = None):
         super().__init__(fh, record)
 
         offset = 0
@@ -343,7 +343,7 @@ class StandardInformation(AttributeRecord):
 
     __slots__ = ("attr",)
 
-    def __init__(self, fh: BinaryIO, record: Optional[MftRecord] = None):
+    def __init__(self, fh: BinaryIO, record: MftRecord | None = None):
         super().__init__(fh, record)
         # Data can be less than the _STANDARD_INFORMATION structure size, so pad remaining fields with null bytes
         data = fh.read().ljust(len(c_ntfs._STANDARD_INFORMATION), b"\x00")
@@ -413,7 +413,7 @@ class FileName(AttributeRecord):
 
     __slots__ = ("attr",)
 
-    def __init__(self, fh: BinaryIO, record: Optional[MftRecord] = None):
+    def __init__(self, fh: BinaryIO, record: MftRecord | None = None):
         super().__init__(fh, record)
         data = fh.read().ljust(len(c_ntfs.STANDARD_INFORMATION_EX), b"\x00")
         self.attr = c_ntfs._FILE_NAME(data)
@@ -489,9 +489,9 @@ class FileName(AttributeRecord):
 class ReparsePoint(AttributeRecord):
     """Specific :class:`AttributeRecord` parser for ``$REPARSE_POINT``."""
 
-    __slots__ = ("attr", "tag_header", "buffer")
+    __slots__ = ("attr", "buffer", "tag_header")
 
-    def __init__(self, fh: BinaryIO, record: Optional[MftRecord] = None):
+    def __init__(self, fh: BinaryIO, record: MftRecord | None = None):
         super().__init__(fh, record)
         self.attr = c_ntfs._REPARSE_DATA_BUFFER(fh)
         data = io.BytesIO(fh.read(self.attr.ReparseDataLength))
@@ -512,7 +512,7 @@ class ReparsePoint(AttributeRecord):
         return self.attr.ReparseTag
 
     @property
-    def substitute_name(self) -> Optional[str]:
+    def substitute_name(self) -> str | None:
         if not self.tag_header:
             return None
 
@@ -521,7 +521,7 @@ class ReparsePoint(AttributeRecord):
         return self.buffer[offset : offset + length].decode("utf-16-le")
 
     @property
-    def print_name(self) -> Optional[str]:
+    def print_name(self) -> str | None:
         if not self.tag_header:
             return None
 

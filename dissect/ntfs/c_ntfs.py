@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import struct
 
 from dissect.cstruct import cstruct
@@ -652,3 +654,4 @@ def bsf(value: int, size: int = 32) -> int:
     for i in range(size):
         if value & (1 << i):
             return i
+    return 0
