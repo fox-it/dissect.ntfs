@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import struct
 from collections import UserDict
-from typing import TYPE_CHECKING, Any, BinaryIO, Optional, Union
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 from dissect.cstruct import Enum
 from dissect.util.stream import RunlistStream
@@ -44,12 +44,12 @@ class AttributeMap(UserDict):
 
         return super().__getattribute__(attr)
 
-    def __getitem__(self, item: Union[ATTRIBUTE_TYPE_CODE, int]) -> AttributeCollection:
+    def __getitem__(self, item: ATTRIBUTE_TYPE_CODE | int) -> AttributeCollection:
         if isinstance(item, Enum):
             item = item.value
         return self.data.get(item, AttributeCollection())
 
-    def __contains__(self, key: Union[ATTRIBUTE_TYPE_CODE, int]) -> bool:
+    def __contains__(self, key: ATTRIBUTE_TYPE_CODE | int) -> bool:
         if isinstance(key, Enum):
             key = key.value
         return super().__contains__(key)
@@ -132,13 +132,13 @@ class AttributeCollection(list):
                 ntfs.cluster_size,
                 attrs[0].header.compression_unit,
             )
-        else:
-            return RunlistStream(
-                ntfs.fh,
-                runs,
-                size,
-                ntfs.cluster_size,
-            )
+
+        return RunlistStream(
+            ntfs.fh,
+            runs,
+            size,
+            ntfs.cluster_size,
+        )
 
     def size(self, allocated: bool = False) -> int:
         """Retrieve the data stream size for this list of attributes.
@@ -169,7 +169,7 @@ class AttributeCollection(list):
     def _get_stream_attrs(self) -> list[Attribute]:
         return sorted((attr for attr in self if not attr.header.resident), key=lambda attr: attr.header.lowest_vcn)
 
-    def _get_dataruns(self, attrs: Optional[list[Attribute]] = None) -> list[tuple[int, int]]:
+    def _get_dataruns(self, attrs: list[Attribute] | None = None) -> list[tuple[int, int]]:
         attrs = attrs or self._get_stream_attrs()
 
         runs = []
@@ -232,10 +232,10 @@ def ensure_volume(ntfs: NTFS) -> None:
         VolumeNotAvailableError: If a volume is not available.
     """
     if not ntfs or not ntfs.fh:
-        raise VolumeNotAvailableError()
+        raise VolumeNotAvailableError
 
 
-def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, seen: set[str] = None) -> str:
+def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, seen: set[str] | None = None) -> str:
     """Walk up parent file references to construct a full path.
 
     Args:
@@ -264,7 +264,7 @@ def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, se
         try:
             record = mft.get(parent_ref)
             if not record.filename:
-                raise FilenameNotAvailableError("No filename")
+                raise FilenameNotAvailableError("No filename")  # noqa: TRY301
 
             if record.header.SequenceNumber != parent.SequenceNumber:
                 path.append(f"<broken_reference_0x{parent_ref:x}#{parent.SequenceNumber}>")

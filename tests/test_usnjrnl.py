@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from io import BytesIO
 
 from dissect.ntfs.usnjrnl import UsnRecord

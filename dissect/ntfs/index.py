@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 from enum import Enum, auto
 from functools import cached_property, lru_cache
-from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable
 
 from dissect.ntfs.attr import AttributeRecord
 from dissect.ntfs.c_ntfs import (
@@ -24,6 +24,8 @@ from dissect.ntfs.exceptions import (
 from dissect.ntfs.util import apply_fixup
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from dissect.ntfs.mft import MftRecord
 
 
@@ -79,7 +81,7 @@ class Index:
         return IndexBuffer(self, self._index_stream, vcn << self._vcn_size_shift, self.root.bytes_per_index_buffer)
 
     def search(
-        self, value: Any, exact: bool = True, cmp: Optional[Callable[[IndexEntry, Any], Match]] = None
+        self, value: Any, exact: bool = True, cmp: Callable[[IndexEntry, Any], Match] | None = None
     ) -> IndexEntry:
         """Perform a binary search on this index.
 
@@ -114,8 +116,7 @@ class Index:
             entry = _bsearch(entries, search_value, cmp)
             if not entry.is_node or (not entry.is_end and cmp(entry, search_value) == Match.Equal):
                 break
-            else:
-                entries = list(self.index_buffer(entry.node_vcn).entries())
+            entries = list(self.index_buffer(entry.node_vcn).entries())
 
         if exact and (entry.is_end or cmp(entry, search_value) != Match.Equal):
             raise KeyError(f"Value not found: {value}")
@@ -216,7 +217,7 @@ class IndexBuffer:
         buf = fh.read(size)
 
         if len(buf) != size:
-            raise EOFError()
+            raise EOFError
 
         if buf[:4] != b"INDX":
             raise BrokenIndexError("Broken INDX header")
@@ -264,7 +265,7 @@ class IndexEntry:
         """
         record = self.index.record
         if not record or not record.ntfs or not record.ntfs.mft:
-            raise MftNotAvailableError()
+            raise MftNotAvailableError
 
         return record.ntfs.mft.get(segment_reference(self.header.FileReference))
 
@@ -284,7 +285,7 @@ class IndexEntry:
         return self.buf[offset : offset + self.header.DataLength]
 
     @cached_property
-    def attribute(self) -> Optional[AttributeRecord]:
+    def attribute(self) -> AttributeRecord | None:
         """Return the :class:`dissect.ntfs.attr.AttributeRecord` of the attribute contained in this entry."""
         if self.key_length and self.index.root.attribute_type:
             return AttributeRecord.from_fh(
@@ -366,10 +367,9 @@ def _cmp_filename(entry: IndexEntry, value: str) -> Match:
 
     if value < test_value:
         return Match.Less
-    elif value == test_value:
+    if value == test_value:
         return Match.Equal
-    else:
-        return Match.Greater
+    return Match.Greater
 
 
 def _cmp_ulong(entry: IndexEntry, value: int) -> Match:
@@ -380,7 +380,6 @@ def _cmp_ulong(entry: IndexEntry, value: int) -> Match:
 
     if value < test_value:
         return Match.Less
-    elif value == test_value:
+    if value == test_value:
         return Match.Equal
-    else:
-        return Match.Greater
+    return Match.Greater

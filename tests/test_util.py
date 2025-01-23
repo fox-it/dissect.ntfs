@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dissect.ntfs.attr import Attribute
 from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE
 from dissect.ntfs.util import AttributeMap, apply_fixup
@@ -7,7 +9,7 @@ def test_fixup() -> None:
     buf = bytearray(
         b"FILE\x30\x00"
         + (b"\x00" * 42)
-        + b"\x02\x00\xFF\x00\xFE\x00"
+        + b"\x02\x00\xff\x00\xfe\x00"
         + (b"\x00" * 456)
         + b"\x02\x00"
         + (b"\x00" * 510)
@@ -15,13 +17,13 @@ def test_fixup() -> None:
     )
     fixed = apply_fixup(buf)
 
-    assert fixed[510:512] == b"\xFF\x00"
-    assert fixed[1022:1024] == b"\xFE\x00"
+    assert fixed[510:512] == b"\xff\x00"
+    assert fixed[1022:1024] == b"\xfe\x00"
 
     buf = bytearray(
         b"FILE\x30\x00"
         + (b"\x00" * 42)
-        + b"\x02\x00\xFF\x00\xFE\x00\xFD\x00\xFC\x00"
+        + b"\x02\x00\xff\x00\xfe\x00\xfd\x00\xfc\x00"
         + (b"\x00" * 452)
         + b"\x02\x00"
         + (b"\x00" * 510)
@@ -33,10 +35,10 @@ def test_fixup() -> None:
     )
     fixed = apply_fixup(buf)
 
-    assert fixed[510:512] == b"\xFF\x00"
-    assert fixed[1022:1024] == b"\xFE\x00"
-    assert fixed[1534:1536] == b"\xFD\x00"
-    assert fixed[2046:2048] == b"\xFC\x00"
+    assert fixed[510:512] == b"\xff\x00"
+    assert fixed[1022:1024] == b"\xfe\x00"
+    assert fixed[1534:1536] == b"\xfd\x00"
+    assert fixed[2046:2048] == b"\xfc\x00"
 
 
 def test_attribute_map() -> None:
