@@ -3,6 +3,7 @@ from __future__ import annotations
 import struct
 
 from dissect.cstruct import cstruct
+from dissect.util.compression import lznt1, lzxpress_huffman
 
 ntfs_def = """
 /* ================ Generic stuff ================ */
@@ -275,6 +276,22 @@ typedef struct _MOUNT_POINT_REPARSE_BUFFER {
     USHORT  PrintNameOffset;
     USHORT  PrintNameLength;
 } _MOUNT_POINT_REPARSE_BUFFER;
+
+enum WOF_COMPRESSION_FORMAT : LONG {
+    NO_COMPRESSION = -2,
+    LZNT1 = -1,
+    XPRESS4K = 0,
+    LZX32K = 1,
+    XPRESS8K = 2,
+    XPRESS16K = 3,
+};
+
+typedef struct _COMPRESS_REPARSE_BUFFER {
+    ULONG WofVersion; // 1 - WIM backing provider ("WIMBoot"), 2 - System compressed file provider
+    ULONG WofProvider;
+    ULONG ProviderVer; // WOF_FILE_PROVIDER_CURRENT_VERSION == 1
+    WOF_COMPRESSION_FORMAT CompressionFormat; // WOF_COMPRESSION_FORMAT
+} COMPRESS_REPARSE_BUFFER;
 
 /* ================ Index ================ */
 
@@ -563,6 +580,17 @@ ACCESS_MASK = c_ntfs.ACCESS_MASK
 ACE_TYPE = c_ntfs.ACE_TYPE
 ACE_OBJECT_FLAGS = c_ntfs.ACE_OBJECT_FLAGS
 COLLATION = c_ntfs.COLLATION
+WOF_COMPRESSION_FORMAT = c_ntfs.WOF_COMPRESSION_FORMAT
+
+WOF_DECOMPRESSOR_MAP = {
+    WOF_COMPRESSION_FORMAT.NO_COMPRESSION: (None, None),
+    WOF_COMPRESSION_FORMAT.LZNT1: (lznt1.decompress, None),
+    WOF_COMPRESSION_FORMAT.XPRESS4K: (lzxpress_huffman.decompress, 4096),
+    WOF_COMPRESSION_FORMAT.XPRESS8K: (lzxpress_huffman.decompress, 4096 * 2),
+    WOF_COMPRESSION_FORMAT.XPRESS16K: (lzxpress_huffman.decompress, 4096 * 4),
+    # LZX is currently not implemented yet. see https://github.com/fox-it/dissect.util/issues/74
+    WOF_COMPRESSION_FORMAT.LZX32K: (None, 4096 * 8),
+}
 
 # Some useful magic numbers and constants
 NTFS_SIGNATURE = b"NTFS    "

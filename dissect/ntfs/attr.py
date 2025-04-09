@@ -9,6 +9,7 @@ from dissect.util.ts import wintimestamp
 from dissect.ntfs.c_ntfs import (
     ATTRIBUTE_TYPE_CODE,
     IO_REPARSE_TAG,
+    WOF_COMPRESSION_FORMAT,
     c_ntfs,
     segment_reference,
     varint,
@@ -501,6 +502,8 @@ class ReparsePoint(AttributeRecord):
             self.tag_header = c_ntfs._SYMBOLIC_LINK_REPARSE_BUFFER(data)
         elif self.tag == IO_REPARSE_TAG.MOUNT_POINT:
             self.tag_header = c_ntfs._MOUNT_POINT_REPARSE_BUFFER(data)
+        elif self.tag == IO_REPARSE_TAG.WOF:
+            self.tag_header = c_ntfs._COMPRESS_REPARSE_BUFFER(data)
 
         self.buffer = data.read()
 
@@ -542,6 +545,13 @@ class ReparsePoint(AttributeRecord):
             return False
 
         return self.tag_header.Flags == c_ntfs.SYMLINK_FLAG.RELATIVE
+
+    @property
+    def wof_compression_format(self) -> int:
+        if self.tag == IO_REPARSE_TAG.WOF:
+            return self.tag_header.CompressionFormat
+
+        return WOF_COMPRESSION_FORMAT.NO_COMPRESSION
 
 
 ATTRIBUTE_CLASS_MAP = {
