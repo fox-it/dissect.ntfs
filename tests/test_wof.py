@@ -46,5 +46,9 @@ def test_lzxpress(
 ) -> None:
     file = request.getfixturevalue(fixture)
 
-    data = WofCompressedStream(file, 0, compressed_size, original_size, decompressor, chunk_size).read()
+    fh = WofCompressedStream(file, 0, compressed_size, original_size, decompressor, chunk_size)
+    assert fh.chunk_size == chunk_size
+    assert len(fh.chunks) == (original_size + chunk_size - 1) // chunk_size
+
+    data = fh.read()
     assert len(data) == original_size

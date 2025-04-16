@@ -9,6 +9,7 @@ from dissect.util.stream import CompressedStream, RunlistStream
 
 DEFAULT_CHUNK_SIZE = 4 * 1024
 
+
 class CompressedRunlistStream(RunlistStream):
     """Specialized :class:`~dissect.util.stream.RunlistStream` for reading NTFS compressed streams.
 
@@ -164,9 +165,7 @@ class WofCompressedStream(CompressedStream):
 
         # https://github.com/ebiggers/ntfs-3g-system-compression/blob/53f7bcba9c1c54d8e15e87649ed66654474885ab/src/system_compression.c#L556
         uncompressed_size = (
-            ((self.original_size - 1) & self.chunk_size - 1) + 1
-            if offset == self.chunks[-1]
-            else self.chunk_size
+            ((self.original_size - 1) & (self.chunk_size - 1)) + 1 if offset == self.chunks[-1] else self.chunk_size
         )
 
         # https://github.com/ebiggers/ntfs-3g-system-compression/blob/53f7bcba9c1c54d8e15e87649ed66654474885ab/src/system_compression.c#L570
