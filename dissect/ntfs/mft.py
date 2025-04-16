@@ -15,6 +15,8 @@ from dissect.ntfs.c_ntfs import (
     FILE_NUMBER_MFT,
     FILE_NUMBER_ROOT,
     IO_REPARSE_TAG,
+    WOF_COMPRESSION_FORMAT,
+    WOF_DECOMPRESSOR_MAP,
     c_ntfs,
     segment_reference,
 )
@@ -27,6 +29,7 @@ from dissect.ntfs.exceptions import (
     NotAReparsePointError,
 )
 from dissect.ntfs.index import Index, IndexEntry
+from dissect.ntfs.stream import WofCompressedStream
 from dissect.ntfs.util import AttributeCollection, AttributeMap, apply_fixup
 
 if TYPE_CHECKING:
@@ -331,6 +334,11 @@ class MftRecord:
         attr = self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT]
         return bool(attr) and attr.tag == IO_REPARSE_TAG.MOUNT_POINT
 
+    def is_wof_compressed(self) -> bool:
+        """Return whether this record is a WOF compressed file."""
+        attr = self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT]
+        return bool(attr) and attr.tag == IO_REPARSE_TAG.WOF
+
     @cached_property
     def reparse_point_name(self) -> str:
         """Return the (printable) name of this reparse point."""
@@ -383,6 +391,23 @@ class MftRecord:
             raise FileNotFoundError(f"No such stream on record {self}: ({name!r}, {attr_type})")
         return attrs
 
+    def _open_wof(
+        self,
+        name: str = "WofCompressedData",
+        attr_type: ATTRIBUTE_TYPE_CODE = ATTRIBUTE_TYPE_CODE.DATA,
+        allocated: bool = False,
+    ) -> BinaryIO:
+        fh = self._get_stream_attributes(name, attr_type).open(allocated)
+        compression_format = self.attributes.REPARSE_POINT.wof_compression_format
+        decompressor, chunk_size = WOF_DECOMPRESSOR_MAP.get(compression_format)
+
+        if compression_format is WOF_COMPRESSION_FORMAT.NO_COMPRESSION:
+            return fh
+        if compression_format in (WOF_COMPRESSION_FORMAT.LZX32K, WOF_COMPRESSION_FORMAT.LZNT1):
+            raise NotImplementedError(f"Compression format not supported for decompression: {compression_format}")
+
+        return WofCompressedStream(fh, 0, fh.size, self.size(), decompressor, chunk_size)
+
     def open(
         self,
         name: str = "",
@@ -399,6 +424,12 @@ class MftRecord:
         Raises:
             FileNotFoundError: If there are no attributes with the given name and type.
         """
+
+        # If we explicitly ask for the WofCompressedData stream, we give it back as is
+        # this way, users can still access the raw uncompressed stream.
+        if name != "WofCompressedData" and (self.is_reparse_point() and self.is_wof_compressed()):
+            return self._open_wof(attr_type=attr_type, allocated=allocated)
+
         return self._get_stream_attributes(name, attr_type).open(allocated)
 
     def size(

@@ -5,7 +5,7 @@ import datetime
 import pytest
 
 from dissect.ntfs.attr import Attribute, FileName, StandardInformation
-from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, IO_REPARSE_TAG
+from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, IO_REPARSE_TAG, WOF_COMPRESSION_FORMAT
 from dissect.ntfs.exceptions import VolumeNotAvailableError
 
 
@@ -110,3 +110,45 @@ def test_reparse_point_symlink() -> None:
     assert attr.print_name == "Target"
     assert not attr.absolute
     assert attr.relative
+
+
+@pytest.mark.parametrize(
+    ("attribute", "compression_format"),
+    [
+        (
+            "c00000003000000000000000000007001800000018000000170000801000000001000000020000000100000000000000ffffffff8279471100000000000000000000000000000000",
+            WOF_COMPRESSION_FORMAT.XPRESS4K,
+        ),
+        (
+            "c0000000300000000000000000000a001800000018000000170000801000000001000000020000000100000002000000ffffffff8279471100000000000000000000000000000000",
+            WOF_COMPRESSION_FORMAT.XPRESS8K,
+        ),
+        (
+            "c00000003000000000000000000007001800000018000000170000801000000001000000020000000100000003000000ffffffff82794711ffffffff827947110000000000000000",
+            WOF_COMPRESSION_FORMAT.XPRESS16K,
+        ),
+        (
+            "c0000000300000000000000000000a001800000018000000170000801000000001000000020000000100000001000000ffffffff82794711ffffffff827947110000000000000000",
+            WOF_COMPRESSION_FORMAT.LZX32K,
+        ),
+        (
+            "c0000000300000000000000000000a0018000000180000001700008010000000010000000200000001000000ffffffffffffffff82794711ffffffff827947110000000000000000",
+            WOF_COMPRESSION_FORMAT.LZNT1,
+        ),
+        (
+            "c0000000300000000000000000000a0018000000180000001700008010000000010000000200000001000000feffffffffffffff82794711ffffffff827947110000000000000000",
+            WOF_COMPRESSION_FORMAT.NO_COMPRESSION,
+        ),
+    ],
+)
+def test_reparse_point_wof(attribute: str, compression_format: int) -> None:
+    attr = Attribute.from_bytes(bytes.fromhex(attribute))
+    assert attr.type == ATTRIBUTE_TYPE_CODE.REPARSE_POINT
+
+    assert attr.tag == IO_REPARSE_TAG.WOF
+    assert attr.absolute
+    assert not attr.relative
+
+    assert attr.substitute_name is None
+    assert attr.print_name is None
+    assert attr.wof_compression_format == compression_format

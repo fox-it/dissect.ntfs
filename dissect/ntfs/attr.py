@@ -9,6 +9,7 @@ from dissect.util.ts import wintimestamp
 from dissect.ntfs.c_ntfs import (
     ATTRIBUTE_TYPE_CODE,
     IO_REPARSE_TAG,
+    WOF_COMPRESSION_FORMAT,
     c_ntfs,
     segment_reference,
     varint,
@@ -501,6 +502,8 @@ class ReparsePoint(AttributeRecord):
             self.tag_header = c_ntfs._SYMBOLIC_LINK_REPARSE_BUFFER(data)
         elif self.tag == IO_REPARSE_TAG.MOUNT_POINT:
             self.tag_header = c_ntfs._MOUNT_POINT_REPARSE_BUFFER(data)
+        elif self.tag == IO_REPARSE_TAG.WOF:
+            self.tag_header = c_ntfs._COMPRESS_REPARSE_BUFFER(data)
 
         self.buffer = data.read()
 
@@ -513,35 +516,42 @@ class ReparsePoint(AttributeRecord):
 
     @property
     def substitute_name(self) -> str | None:
-        if not self.tag_header:
-            return None
+        if self.tag in (IO_REPARSE_TAG.SYMLINK, IO_REPARSE_TAG.MOUNT_POINT):
+            offset = self.tag_header.SubstituteNameOffset
+            length = self.tag_header.SubstituteNameLength
+            return self.buffer[offset : offset + length].decode("utf-16-le")
 
-        offset = self.tag_header.SubstituteNameOffset
-        length = self.tag_header.SubstituteNameLength
-        return self.buffer[offset : offset + length].decode("utf-16-le")
+        return None
 
     @property
     def print_name(self) -> str | None:
-        if not self.tag_header:
-            return None
+        if self.tag in (IO_REPARSE_TAG.SYMLINK, IO_REPARSE_TAG.MOUNT_POINT):
+            offset = self.tag_header.PrintNameOffset
+            length = self.tag_header.PrintNameLength
+            return self.buffer[offset : offset + length].decode("utf-16-le")
 
-        offset = self.tag_header.PrintNameOffset
-        length = self.tag_header.PrintNameLength
-        return self.buffer[offset : offset + length].decode("utf-16-le")
+        return None
 
     @property
     def absolute(self) -> bool:
-        if self.tag != IO_REPARSE_TAG.SYMLINK:
-            return True
+        if self.tag == IO_REPARSE_TAG.SYMLINK:
+            return self.tag_header.Flags == c_ntfs.SYMLINK_FLAG.ABSOLUTE
 
-        return self.tag_header.Flags == c_ntfs.SYMLINK_FLAG.ABSOLUTE
+        return True
 
     @property
     def relative(self) -> bool:
-        if self.tag != IO_REPARSE_TAG.SYMLINK:
-            return False
+        if self.tag == IO_REPARSE_TAG.SYMLINK:
+            return self.tag_header.Flags == c_ntfs.SYMLINK_FLAG.RELATIVE
 
-        return self.tag_header.Flags == c_ntfs.SYMLINK_FLAG.RELATIVE
+        return False
+
+    @property
+    def wof_compression_format(self) -> int:
+        if self.tag == IO_REPARSE_TAG.WOF:
+            return self.tag_header.CompressionFormat
+
+        return WOF_COMPRESSION_FORMAT.NO_COMPRESSION
 
 
 ATTRIBUTE_CLASS_MAP = {
