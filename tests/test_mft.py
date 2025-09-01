@@ -99,6 +99,8 @@ def test_mft_records_segment_number(mft_bin: BinaryIO) -> None:
 
 
 def test_mft_record_reparse_cloud(mft_bin: BinaryIO) -> None:
+    """Test if the MftRecord.is_cloud_file() method works correctly."""
+
     fs = NTFS(mft=mft_bin)
 
     data = bytes.fromhex(
@@ -129,4 +131,16 @@ def test_mft_record_reparse_cloud(mft_bin: BinaryIO) -> None:
     assert record.filename == "example.txt"
     assert record.is_reparse_point()
     assert record.is_cloud_file()
+    assert record.open().read() == b"This is an example file in the OneDrive folder!\r\n"
+
+
+def test_mft_record_reparse_cloud_full(ntfs_cloud_bin: BinaryIO) -> None:
+    """Test if offline saved OneDrive MftRecords can be found and read succesfully."""
+
+    fs = NTFS(ntfs_cloud_bin)
+
+    record = fs.mft.get("OneDrive/example.txt")
+    assert record.filename == "example.txt"
+    assert record.is_cloud_file()
+    assert record.is_file()
     assert record.open().read() == b"This is an example file in the OneDrive folder!\r\n"

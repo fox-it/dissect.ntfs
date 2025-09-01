@@ -33,6 +33,11 @@ def mft_bin() -> Iterator[BinaryIO]:
 
 
 @pytest.fixture
+def ntfs_cloud_bin() -> Iterator[BinaryIO]:
+    yield from open_file_gz("data/ntfs-cloud.bin.gz")
+
+
+@pytest.fixture
 def sds_bin() -> Iterator[BinaryIO]:
     yield from open_file_gz("data/sds.bin.gz")
 
