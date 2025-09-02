@@ -99,7 +99,7 @@ def test_mft_records_segment_number(mft_bin: BinaryIO) -> None:
 
 
 def test_mft_record_reparse_cloud(mft_bin: BinaryIO) -> None:
-    """Test if the MftRecord.is_cloud_file() method works correctly."""
+    """Test if the ``MftRecord.is_cloud_file()`` method works correctly."""
 
     fs = NTFS(mft=mft_bin)
 
