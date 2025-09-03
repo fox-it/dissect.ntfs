@@ -276,6 +276,14 @@ typedef struct _MOUNT_POINT_REPARSE_BUFFER {
     USHORT  PrintNameLength;
 } _MOUNT_POINT_REPARSE_BUFFER;
 
+typedef struct _CLOUD_FILTER_REPARSE_BUFFER {
+    // ULONG   Unknown_1;
+    // ULONG   Unknown_2;
+    CHAR    Guid[16];
+    USHORT  NameLength;
+    // WCHAR    Name[NameLength];
+} _CLOUD_FILTER_REPARSE_BUFFER;
+
 /* ================ Index ================ */
 
 enum COLLATION : ULONG {
@@ -565,22 +573,22 @@ ACE_OBJECT_FLAGS = c_ntfs.ACE_OBJECT_FLAGS
 COLLATION = c_ntfs.COLLATION
 
 IO_REPARSE_TAG_CLOUD = (
-    IO_REPARSE_TAG.CLOUD,
-    IO_REPARSE_TAG.CLOUD_1,
-    IO_REPARSE_TAG.CLOUD_2,
-    IO_REPARSE_TAG.CLOUD_3,
-    IO_REPARSE_TAG.CLOUD_4,
-    IO_REPARSE_TAG.CLOUD_5,
-    IO_REPARSE_TAG.CLOUD_6,
-    IO_REPARSE_TAG.CLOUD_7,
-    IO_REPARSE_TAG.CLOUD_8,
-    IO_REPARSE_TAG.CLOUD_9,
-    IO_REPARSE_TAG.CLOUD_A,
-    IO_REPARSE_TAG.CLOUD_B,
-    IO_REPARSE_TAG.CLOUD_C,
-    IO_REPARSE_TAG.CLOUD_D,
-    IO_REPARSE_TAG.CLOUD_E,
-    IO_REPARSE_TAG.CLOUD_F,
+    c_ntfs.IO_REPARSE_TAG.CLOUD,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_1,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_2,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_3,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_4,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_5,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_6,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_7,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_8,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_9,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_A,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_B,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_C,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_D,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_E,
+    c_ntfs.IO_REPARSE_TAG.CLOUD_F,
 )
 
 # Some useful magic numbers and constants
