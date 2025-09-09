@@ -882,8 +882,6 @@ ACE_TYPE: TypeAlias = c_ntfs.ACE_TYPE
 ACE_OBJECT_FLAGS: TypeAlias = c_ntfs.ACE_OBJECT_FLAGS
 COLLATION: TypeAlias = c_ntfs.COLLATION
 
-IO_REPARSE_TAG_CLOUD: tuple[c_ntfs.IO_REPARSE_TAG, ...]
-
 NTFS_SIGNATURE: bytes = ...
 
 SECTOR_SIZE: int = ...

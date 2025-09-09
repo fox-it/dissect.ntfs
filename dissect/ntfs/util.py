@@ -14,7 +14,6 @@ from dissect.ntfs.c_ntfs import (
     SECTOR_SHIFT,
     SECTOR_SIZE,
     c_ntfs,
-    segment_reference,
 )
 from dissect.ntfs.exceptions import FilenameNotAvailableError, VolumeNotAvailableError
 from dissect.ntfs.stream import CompressedRunlistStream
@@ -283,3 +282,41 @@ def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, se
 def ts_to_ns(ts: int) -> int:
     """Convert Windows timestamps to nanosecond timestamps."""
     return (ts * 100) - 11644473600000000000
+
+
+def segment_reference(reference: c_ntfs._MFT_SEGMENT_REFERENCE) -> int:
+    """Helper to calculate the complete segment number from a cstruct MFT segment reference.
+
+    Args:
+        reference: A cstruct _MFT_SEGMENT_REFERENCE instance to return the complete segment number of.
+    """
+    return reference.SegmentNumberLowPart | (reference.SegmentNumberHighPart << 32)
+
+
+def varint(buf: bytes) -> int:
+    """Parse variable integers.
+
+    Dataruns in NTFS are stored as a tuple of variable sized integers. The size of each integer is
+    stored in the first byte, 4 bits for each integer. This logic can be seen in
+    :func:`AttributeHeader.dataruns <dissect.ntfs.attr.AttributeHeader.dataruns>`.
+
+    This function only parses those variable amount of bytes into actual integers. To do that, we
+    simply pad the bytes to 8 bytes long and parse it as a signed 64 bit integer. We pad with 0xff
+    if the number is negative and 0x00 otherwise.
+
+    Args:
+        buf: The byte buffer to parse a varint from.
+    """
+    if len(buf) < 8:
+        buf += (b"\xff" if buf[-1] & 0x80 else b"\x00") * (8 - len(buf))
+
+    return struct.unpack("<q", buf)[0]
+
+
+def bsf(value: int) -> int:
+    """Count the number of trailing zero bits in an integer of a given size.
+
+    Args:
+        value: The integer to count trailing zero bits in.
+    """
+    return (value & -value).bit_length() - 1 if value else 0

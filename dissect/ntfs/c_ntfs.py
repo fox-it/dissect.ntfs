@@ -572,25 +572,6 @@ ACE_TYPE = c_ntfs.ACE_TYPE
 ACE_OBJECT_FLAGS = c_ntfs.ACE_OBJECT_FLAGS
 COLLATION = c_ntfs.COLLATION
 
-IO_REPARSE_TAG_CLOUD = (
-    c_ntfs.IO_REPARSE_TAG.CLOUD,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_1,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_2,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_3,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_4,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_5,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_6,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_7,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_8,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_9,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_A,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_B,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_C,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_D,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_E,
-    c_ntfs.IO_REPARSE_TAG.CLOUD_F,
-)
-
 # Some useful magic numbers and constants
 NTFS_SIGNATURE = b"NTFS    "
 
@@ -640,45 +621,3 @@ COMPRESSION_FORMAT_LZNT1 = 0x0002
 INDEX_NODE = 0x01
 INDEX_ENTRY_NODE = 0x01
 INDEX_ENTRY_END = 0x02
-
-
-def segment_reference(reference: c_ntfs._MFT_SEGMENT_REFERENCE) -> int:
-    """Helper to calculate the complete segment number from a cstruct MFT segment reference.
-
-    Args:
-        reference: A cstruct _MFT_SEGMENT_REFERENCE instance to return the complete segment number of.
-    """
-    return reference.SegmentNumberLowPart | (reference.SegmentNumberHighPart << 32)
-
-
-def varint(buf: bytes) -> int:
-    """Parse variable integers.
-
-    Dataruns in NTFS are stored as a tuple of variable sized integers. The size of each integer is
-    stored in the first byte, 4 bits for each integer. This logic can be seen in
-    :func:`AttributeHeader.dataruns <dissect.ntfs.attr.AttributeHeader.dataruns>`.
-
-    This function only parses those variable amount of bytes into actual integers. To do that, we
-    simply pad the bytes to 8 bytes long and parse it as a signed 64 bit integer. We pad with 0xff
-    if the number is negative and 0x00 otherwise.
-
-    Args:
-        buf: The byte buffer to parse a varint from.
-    """
-    if len(buf) < 8:
-        buf += (b"\xff" if buf[-1] & 0x80 else b"\x00") * (8 - len(buf))
-
-    return struct.unpack("<q", buf)[0]
-
-
-def bsf(value: int, size: int = 32) -> int:
-    """Count the number of trailing zero bits in an integer of a given size.
-
-    Args:
-        value: The integer to count trailing zero bits in.
-        size: Integer size to limit to.
-    """
-    for i in range(size):
-        if value & (1 << i):
-            return i
-    return 0
