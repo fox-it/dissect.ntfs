@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import struct
-
 from dissect.cstruct import cstruct
 
 ntfs_def = """
