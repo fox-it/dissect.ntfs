@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import struct
-
 from dissect.cstruct import cstruct
 
 ntfs_def = """
@@ -275,6 +273,14 @@ typedef struct _MOUNT_POINT_REPARSE_BUFFER {
     USHORT  PrintNameOffset;
     USHORT  PrintNameLength;
 } _MOUNT_POINT_REPARSE_BUFFER;
+
+typedef struct _CLOUD_FILTER_REPARSE_BUFFER {
+    // ULONG   Unknown_1;
+    // ULONG   Unknown_2;
+    CHAR    Guid[16];
+    USHORT  NameLength;
+    // WCHAR    Name[NameLength];
+} _CLOUD_FILTER_REPARSE_BUFFER;
 
 /* ================ Index ================ */
 
@@ -613,45 +619,3 @@ COMPRESSION_FORMAT_LZNT1 = 0x0002
 INDEX_NODE = 0x01
 INDEX_ENTRY_NODE = 0x01
 INDEX_ENTRY_END = 0x02
-
-
-def segment_reference(reference: c_ntfs._MFT_SEGMENT_REFERENCE) -> int:
-    """Helper to calculate the complete segment number from a cstruct MFT segment reference.
-
-    Args:
-        reference: A cstruct _MFT_SEGMENT_REFERENCE instance to return the complete segment number of.
-    """
-    return reference.SegmentNumberLowPart | (reference.SegmentNumberHighPart << 32)
-
-
-def varint(buf: bytes) -> int:
-    """Parse variable integers.
-
-    Dataruns in NTFS are stored as a tuple of variable sized integers. The size of each integer is
-    stored in the first byte, 4 bits for each integer. This logic can be seen in
-    :func:`AttributeHeader.dataruns <dissect.ntfs.attr.AttributeHeader.dataruns>`.
-
-    This function only parses those variable amount of bytes into actual integers. To do that, we
-    simply pad the bytes to 8 bytes long and parse it as a signed 64 bit integer. We pad with 0xff
-    if the number is negative and 0x00 otherwise.
-
-    Args:
-        buf: The byte buffer to parse a varint from.
-    """
-    if len(buf) < 8:
-        buf += (b"\xff" if buf[-1] & 0x80 else b"\x00") * (8 - len(buf))
-
-    return struct.unpack("<q", buf)[0]
-
-
-def bsf(value: int, size: int = 32) -> int:
-    """Count the number of trailing zero bits in an integer of a given size.
-
-    Args:
-        value: The integer to count trailing zero bits in.
-        size: Integer size to limit to.
-    """
-    for i in range(size):
-        if value & (1 << i):
-            return i
-    return 0

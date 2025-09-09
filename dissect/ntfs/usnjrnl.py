@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Any, BinaryIO
 from dissect.util.stream import RunlistStream
 from dissect.util.ts import wintimestamp
 
-from dissect.ntfs.c_ntfs import USN_PAGE_SIZE, c_ntfs, segment_reference
+from dissect.ntfs.c_ntfs import USN_PAGE_SIZE, c_ntfs
 from dissect.ntfs.exceptions import Error
-from dissect.ntfs.util import ts_to_ns
+from dissect.ntfs.util import segment_reference, ts_to_ns
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

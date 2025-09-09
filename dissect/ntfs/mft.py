@@ -16,7 +16,6 @@ from dissect.ntfs.c_ntfs import (
     FILE_NUMBER_ROOT,
     IO_REPARSE_TAG,
     c_ntfs,
-    segment_reference,
 )
 from dissect.ntfs.exceptions import (
     BrokenMftError,
@@ -27,7 +26,7 @@ from dissect.ntfs.exceptions import (
     NotAReparsePointError,
 )
 from dissect.ntfs.index import Index, IndexEntry
-from dissect.ntfs.util import AttributeCollection, AttributeMap, apply_fixup
+from dissect.ntfs.util import AttributeCollection, AttributeMap, apply_fixup, segment_reference
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -73,11 +72,11 @@ class Mft:
 
         parts = search_path.split("\\")
 
-        for part_num, part in enumerate(parts):
+        for part in parts:
             if not part:
                 continue
 
-            while node.is_reparse_point() and part_num < len(parts):
+            while node.is_symlink() or node.is_mount_point():
                 node = node.reparse_point_record
 
             if not node.is_dir():
@@ -330,6 +329,28 @@ class MftRecord:
         """Return whether this record is a mount point reparse point."""
         attr = self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT]
         return bool(attr) and attr.tag == IO_REPARSE_TAG.MOUNT_POINT
+
+    def is_cloud_file(self) -> bool:
+        """Return whether this record is a cloud reparse point."""
+        attr = self.attributes[ATTRIBUTE_TYPE_CODE.REPARSE_POINT]
+        return bool(attr) and attr.tag in (
+            IO_REPARSE_TAG.CLOUD,
+            IO_REPARSE_TAG.CLOUD_1,
+            IO_REPARSE_TAG.CLOUD_2,
+            IO_REPARSE_TAG.CLOUD_3,
+            IO_REPARSE_TAG.CLOUD_4,
+            IO_REPARSE_TAG.CLOUD_5,
+            IO_REPARSE_TAG.CLOUD_6,
+            IO_REPARSE_TAG.CLOUD_7,
+            IO_REPARSE_TAG.CLOUD_8,
+            IO_REPARSE_TAG.CLOUD_9,
+            IO_REPARSE_TAG.CLOUD_A,
+            IO_REPARSE_TAG.CLOUD_B,
+            IO_REPARSE_TAG.CLOUD_C,
+            IO_REPARSE_TAG.CLOUD_D,
+            IO_REPARSE_TAG.CLOUD_E,
+            IO_REPARSE_TAG.CLOUD_F,
+        )
 
     @cached_property
     def reparse_point_name(self) -> str:

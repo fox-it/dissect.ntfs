@@ -24,27 +24,32 @@ def open_file_gz(name: str, mode: str = "rb") -> Iterator[BinaryIO]:
 
 @pytest.fixture
 def ntfs_bin() -> Iterator[BinaryIO]:
-    yield from open_file_gz("data/ntfs.bin.gz")
+    yield from open_file_gz("_data/ntfs.bin.gz")
 
 
 @pytest.fixture
 def mft_bin() -> Iterator[BinaryIO]:
-    yield from open_file_gz("data/mft.bin.gz")
+    yield from open_file_gz("_data/mft.bin.gz")
+
+
+@pytest.fixture
+def ntfs_cloud_bin() -> Iterator[BinaryIO]:
+    yield from open_file_gz("_data/ntfs-cloud.bin.gz")
 
 
 @pytest.fixture
 def sds_bin() -> Iterator[BinaryIO]:
-    yield from open_file_gz("data/sds.bin.gz")
+    yield from open_file_gz("_data/sds.bin.gz")
 
 
 @pytest.fixture
 def sds_complex_bin() -> Iterator[BinaryIO]:
-    yield from open_file_gz("data/sds_complex.bin.gz")
+    yield from open_file_gz("_data/sds_complex.bin.gz")
 
 
 @pytest.fixture
 def boot_2m_bin() -> Iterator[BinaryIO]:
-    yield from open_file_gz("data/boot_2m.bin.gz")
+    yield from open_file_gz("_data/boot_2m.bin.gz")
 
 
 @pytest.fixture
@@ -55,7 +60,7 @@ def ntfs_fragmented_mft_fh() -> BinaryIO:
     # We use a MappingStream to stitch everything together at the correct offsets
 
     stream = MappingStream(align=512)
-    with io.TextIOWrapper(gzip.open(absolute_path("data/ntfs_fragmented_mft.csv.gz"), "r")) as fh:
+    with io.TextIOWrapper(gzip.open(absolute_path("_data/ntfs_fragmented_mft.csv.gz"), "r")) as fh:
         for offset, data in csv.reader(fh):
             buf = bytes.fromhex(data)
             stream.add(int(offset), len(buf), io.BytesIO(buf), 0)

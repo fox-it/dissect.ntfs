@@ -6,15 +6,9 @@ from typing import TYPE_CHECKING, Any, BinaryIO
 from dissect.util.stream import RangeStream, RunlistStream
 from dissect.util.ts import wintimestamp
 
-from dissect.ntfs.c_ntfs import (
-    ATTRIBUTE_TYPE_CODE,
-    IO_REPARSE_TAG,
-    c_ntfs,
-    segment_reference,
-    varint,
-)
+from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, IO_REPARSE_TAG, c_ntfs
 from dissect.ntfs.exceptions import MftNotAvailableError, VolumeNotAvailableError
-from dissect.ntfs.util import ensure_volume, get_full_path, ts_to_ns
+from dissect.ntfs.util import ensure_volume, get_full_path, segment_reference, ts_to_ns, varint
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
