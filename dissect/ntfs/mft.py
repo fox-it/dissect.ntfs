@@ -72,11 +72,11 @@ class Mft:
 
         parts = search_path.split("\\")
 
-        for part_num, part in enumerate(parts):
+        for part in parts:
             if not part:
                 continue
 
-            while (node.is_symlink() or node.is_mount_point()) and part_num < len(parts):
+            while node.is_symlink() or node.is_mount_point():
                 node = node.reparse_point_record
 
             if not node.is_dir():
