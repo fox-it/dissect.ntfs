@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 from enum import Enum, auto
 from functools import cached_property, lru_cache
-from typing import TYPE_CHECKING, Any, BinaryIO, Callable
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 from dissect.ntfs.attr import AttributeRecord
 from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, COLLATION, INDEX_ENTRY_END, INDEX_ENTRY_NODE, SECTOR_SHIFT, c_ntfs
@@ -16,7 +16,7 @@ from dissect.ntfs.exceptions import (
 from dissect.ntfs.util import apply_fixup, segment_reference
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from dissect.ntfs.mft import MftRecord
 
