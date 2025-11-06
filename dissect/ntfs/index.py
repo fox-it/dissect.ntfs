@@ -31,6 +31,7 @@ class Index:
     """Open an index with he given name on the given MFT record.
 
     Args:
+        record: The :class:`MftRecord` to open the index on.
         name: The index to open.
 
     Raises:

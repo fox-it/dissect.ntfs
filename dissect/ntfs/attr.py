@@ -456,6 +456,11 @@ class FileName(AttributeRecord):
         return ts_to_ns(self.attr.LastAccessTime)
 
     @property
+    def allocated_size(self) -> int:
+        """Return the ``$FILE_NAME`` file ``AllocatedLength``."""
+        return self.attr.AllocatedLength
+
+    @property
     def file_size(self) -> int:
         """Return the ``$FILE_NAME`` file ``FileSize``."""
         return self.attr.FileSize
@@ -463,7 +468,16 @@ class FileName(AttributeRecord):
     @property
     def file_attributes(self) -> int:
         """Return the ``$FILE_NAME`` file ``FileAttributes``."""
-        return self.attr.FileAttributes
+        attributes = self.attr.FileAttributes
+
+        if attributes & c_ntfs.FILE_NAME_INDEX_PRESENT:
+            attributes &= ~c_ntfs.FILE_NAME_INDEX_PRESENT
+            attributes |= c_ntfs.FILE_ATTRIBUTE.DIRECTORY.value
+
+        if attributes == 0:
+            attributes |= c_ntfs.FILE_ATTRIBUTE.NORMAL.value
+
+        return c_ntfs.FILE_ATTRIBUTE(attributes)
 
     @property
     def flags(self) -> int:
@@ -478,6 +492,47 @@ class FileName(AttributeRecord):
     def full_path(self) -> str:
         """Use the parent directory reference to try to generate a full path from this file name."""
         return get_full_path(self.record.ntfs.mft, self.file_name, self.attr.ParentDirectory)
+
+    def is_dir(self) -> bool:
+        """Return whether this ``$FILE_NAME`` attribute represents a directory."""
+        return bool(self.attr.FileAttributes & c_ntfs.FILE_NAME_INDEX_PRESENT)
+
+    def is_file(self) -> bool:
+        """Return whether this ``$FILE_NAME`` attribute represents a file."""
+        return not self.is_dir()
+
+    def is_reparse_point(self) -> bool:
+        """Return whether this ``$FILE_NAME`` attribute represents a reparse point."""
+        return bool(self.attr.FileAttributes & c_ntfs.FILE_ATTRIBUTE.REPARSE_POINT)
+
+    def is_symlink(self) -> bool:
+        """Return whether this ``$FILE_NAME`` attribute represents a symlink reparse point."""
+        return self.is_reparse_point() and self.attr.ReparsePointTag == IO_REPARSE_TAG.SYMLINK
+
+    def is_mount_point(self) -> bool:
+        """Return whether this ``$FILE_NAME`` attribute represents a mount point reparse point."""
+        return self.is_reparse_point() and self.attr.ReparsePointTag == IO_REPARSE_TAG.MOUNT_POINT
+
+    def is_cloud_file(self) -> bool:
+        """Return whether this ``$FILE_NAME`` attribute represents a cloud file."""
+        return self.is_reparse_point() and self.attr.ReparsePointTag in (
+            IO_REPARSE_TAG.CLOUD,
+            IO_REPARSE_TAG.CLOUD_1,
+            IO_REPARSE_TAG.CLOUD_2,
+            IO_REPARSE_TAG.CLOUD_3,
+            IO_REPARSE_TAG.CLOUD_4,
+            IO_REPARSE_TAG.CLOUD_5,
+            IO_REPARSE_TAG.CLOUD_6,
+            IO_REPARSE_TAG.CLOUD_7,
+            IO_REPARSE_TAG.CLOUD_8,
+            IO_REPARSE_TAG.CLOUD_9,
+            IO_REPARSE_TAG.CLOUD_A,
+            IO_REPARSE_TAG.CLOUD_B,
+            IO_REPARSE_TAG.CLOUD_C,
+            IO_REPARSE_TAG.CLOUD_D,
+            IO_REPARSE_TAG.CLOUD_E,
+            IO_REPARSE_TAG.CLOUD_F,
+        )
 
 
 class ReparsePoint(AttributeRecord):

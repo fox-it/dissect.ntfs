@@ -191,6 +191,8 @@ typedef struct _FILE_NAME {
     WCHAR       FileName[FileNameLength];
 } FILE_NAME;
 
+#define FILE_NAME_INDEX_PRESENT             0x10000000
+
 enum IO_REPARSE_TAG : ULONG {
     RESERVED_ZERO           = 0x00000000,
     RESERVED_ONE            = 0x00000001,
