@@ -385,6 +385,9 @@ class MftRecord:
         if reparse_point.relative:
             target_name = ntpath.join(ntpath.dirname(self.full_path()), target_name)
 
+        if not target_name:
+            raise NotAReparsePointError(f"{self!r} does not have a valid reparse target")
+
         return self.ntfs.mft.get(target_name)
 
     def _get_stream_attributes(
