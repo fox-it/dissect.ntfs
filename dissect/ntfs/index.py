@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 from enum import Enum, auto
-from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING, Any, BinaryIO
 
 from dissect.ntfs.attr import AttributeRecord
@@ -53,8 +52,6 @@ class Index:
             self._index_stream = self.record.open(self.name, ATTRIBUTE_TYPE_CODE.INDEX_ALLOCATION)
         except FileNotFoundError:
             self._index_stream = None
-
-        self.index_buffer = lru_cache(128)(self.index_buffer)
 
     def __iter__(self) -> Iterator[IndexEntry]:
         return self.entries()
@@ -262,12 +259,12 @@ class IndexEntry:
 
         return record.ntfs.mft.get(segment_reference(self.header.FileReference))
 
-    @cached_property
+    @property
     def key(self) -> bytes:
         """Return the index key of this entry."""
         return self.buf[: self.header.KeyLength]
 
-    @cached_property
+    @property
     def data(self) -> bytes:
         """Return the data part of this entry.
 
@@ -277,7 +274,7 @@ class IndexEntry:
         offset = self.header.DataOffset - len(c_ntfs._INDEX_ENTRY)
         return self.buf[offset : offset + self.header.DataLength]
 
-    @cached_property
+    @property
     def attribute(self) -> AttributeRecord | None:
         """Return the :class:`dissect.ntfs.attr.AttributeRecord` of the attribute contained in this entry."""
         if self.key_length and self.index.root.attribute_type:
