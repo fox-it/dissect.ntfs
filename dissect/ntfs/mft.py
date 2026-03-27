@@ -25,13 +25,15 @@ from dissect.ntfs.exceptions import (
     NotADirectoryError,
     NotAReparsePointError,
 )
-from dissect.ntfs.index import Index, IndexEntry
-from dissect.ntfs.util import AttributeCollection, AttributeMap, apply_fixup, segment_reference
+from dissect.ntfs.index import Index
+from dissect.ntfs.util import AttributeMap, apply_fixup, segment_reference
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from dissect.ntfs.index import IndexEntry
     from dissect.ntfs.ntfs import NTFS
+    from dissect.ntfs.util import AttributeCollection
 
 
 class Mft:

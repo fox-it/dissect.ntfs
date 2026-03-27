@@ -13,13 +13,15 @@ from dissect.ntfs.c_ntfs import (
     FILE_NUMBER_ROOT,
     SECTOR_SHIFT,
     SECTOR_SIZE,
-    c_ntfs,
 )
 from dissect.ntfs.exceptions import FilenameNotAvailableError, VolumeNotAvailableError
 from dissect.ntfs.stream import CompressedRunlistStream
 
 if TYPE_CHECKING:
     from dissect.ntfs.attr import Attribute
+    from dissect.ntfs.c_ntfs import (
+        c_ntfs,
+    )
     from dissect.ntfs.mft import Mft
     from dissect.ntfs.ntfs import NTFS
 

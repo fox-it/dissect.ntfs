@@ -118,7 +118,6 @@ class Index:
 
     def entries(self) -> Iterator[IndexEntry]:
         """Yield all :class:`IndexEntry`'s in this :class:`Index`."""
-
         for entry in self.root.entries():
             if entry.is_end:
                 break

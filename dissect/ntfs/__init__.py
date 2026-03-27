@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dissect.ntfs.attr import Attribute, AttributeHeader, AttributeRecord
 from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, NTFS_SIGNATURE
 from dissect.ntfs.index import Index, IndexEntry
