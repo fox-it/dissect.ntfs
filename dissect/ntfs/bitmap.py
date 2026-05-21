@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from dissect.util.blockbitmap import bitmap_to_runs
+from dissect.util.bitmap import bitmap_to_runlists
 from dissect.util.stream import RunlistStream
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ class Bitmap:
             block = self.bitmap_fh.read(bytes_needed)
             if block == b"":
                 break
-            unallocated_runlist, allocated_runlist = bitmap_to_runs(block, current_cluster, clusters_to_read)
+            unallocated_runlist, allocated_runlist = bitmap_to_runlists(block, current_cluster, clusters_to_read)
             yield (
                 RunlistStream(
                     self.ntfs.fh,
