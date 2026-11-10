@@ -61,10 +61,11 @@ class Mft:
     def _get_path(self, path: str, root: MftRecord | None = None) -> MftRecord:
         """Resolve a file path to the correct MFT record.
 
-        ``.`` and ``..`` path components are resolved lexically (like Windows does), meaning that ``..`` returns to
-        the record that was traversed before it, without following any symlinks or mount points first. If there is
-        no previously traversed record (e.g. ``..`` relative to ``root``), the parent directory reference of the
-        ``$FILE_NAME`` attribute is used instead. The parent of the root directory is the root directory itself.
+        ``.`` and ``..`` path components are normalized lexically first, like Win32 path normalization does
+        (e.g. ``GetFullPathNameW``). This means a ``..`` cancels out the preceding component without that
+        component being looked up, and without following any symlinks or mount points. Any leading ``..``
+        components are resolved from ``root`` using the parent directory reference of its ``$FILE_NAME``
+        attribute. The parent of the root directory is the root directory itself.
 
         Args:
             path: The path to resolve.
@@ -75,22 +76,28 @@ class Mft:
         # Programmatically we will often use the `/` separator, so replace it with the native path separator of NTFS
         # `/` is an illegal character in NTFS filenames, so it's safe to replace
         search_path = path.replace("/", "\\")
-        node = root
 
-        parts = search_path.split("\\")
-        # Records traversed so far, used to resolve ``..`` components
-        stack: list[MftRecord] = []
-
-        for part in parts:
+        # Lexically normalize "." and ".." components
+        parts: list[str] = []
+        num_parents = 0
+        for part in search_path.split("\\"):
             if not part or part == ".":
                 continue
 
             if part == "..":
-                node = stack.pop() if stack else self._get_parent(node)
+                if parts:
+                    parts.pop()
+                else:
+                    num_parents += 1
                 continue
 
-            stack.append(node)
+            parts.append(part)
 
+        node = root
+        for _ in range(num_parents):
+            node = self._get_parent(node)
+
+        for part in parts:
             while node.is_symlink() or node.is_mount_point():
                 node = node.reparse_point_record
 
