@@ -61,6 +61,11 @@ class Mft:
     def _get_path(self, path: str, root: MftRecord | None = None) -> MftRecord:
         """Resolve a file path to the correct MFT record.
 
+        ``.`` and ``..`` path components are resolved lexically (like Windows does), meaning that ``..`` returns to
+        the record that was traversed before it, without following any symlinks or mount points first. If there is
+        no previously traversed record (e.g. ``..`` relative to ``root``), the parent directory reference of the
+        ``$FILE_NAME`` attribute is used instead. The parent of the root directory is the root directory itself.
+
         Args:
             path: The path to resolve.
             root: Optional root record to start resolving from. Useful for relative path lookups.
@@ -73,10 +78,18 @@ class Mft:
         node = root
 
         parts = search_path.split("\\")
+        # Records traversed so far, used to resolve ``..`` components
+        stack: list[MftRecord] = []
 
         for part in parts:
-            if not part:
+            if not part or part == ".":
                 continue
+
+            if part == "..":
+                node = stack.pop() if stack else self._get_parent(node)
+                continue
+
+            stack.append(node)
 
             while node.is_symlink() or node.is_mount_point():
                 node = node.reparse_point_record
@@ -91,6 +104,22 @@ class Mft:
                 raise FileNotFoundError(f"File not found: {path}")
 
         return node
+
+    def _get_parent(self, record: MftRecord) -> MftRecord:
+        """Return the parent directory record of the given record, using its ``$FILE_NAME`` attribute.
+
+        The root directory (and any record without a ``$FILE_NAME`` attribute) is its own parent.
+        Records with multiple hard links have multiple parents, in which case a non-DOS name is preferred.
+        """
+        if record.segment == FILE_NUMBER_ROOT:
+            return record
+
+        attrs = record.attributes[ATTRIBUTE_TYPE_CODE.FILE_NAME]
+        if not attrs:
+            return record
+
+        attr = next((attr for attr in attrs if attr.flags != FILE_NAME_DOS), attrs[0])
+        return self.get(segment_reference(attr.attr.ParentDirectory))
 
     def get(self, ref: int | str | c_ntfs._MFT_SEGMENT_REFERENCE, root: MftRecord | None = None) -> MftRecord:
         """Retrieve an MFT record using a variety of methods.

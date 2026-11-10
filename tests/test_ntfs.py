@@ -52,6 +52,40 @@ def test_ntfs(ntfs_bin: BinaryIO) -> None:
     assert fs.mft.get("Directory/File 1.txt").full_path() == "Directory\\File 1.txt"
 
 
+def test_ntfs_dot_components(ntfs_bin: BinaryIO) -> None:
+    fs = NTFS(ntfs_bin)
+
+    root = fs.mft.root
+    directory = fs.mft.get("Directory")
+    file_1 = fs.mft.get("Directory/File 1.txt")
+
+    # Current directory components are skipped
+    assert fs.mft.get(".") == root
+    assert fs.mft.get("./Directory/./File 1.txt") == file_1
+    assert directory.get(".") == directory
+
+    # Parent directory components return to the previously traversed record
+    assert fs.mft.get("Directory/..") == root
+    assert fs.mft.get("Directory/../Directory/File 1.txt") == file_1
+    assert fs.mft.get("Directory\\File 1.txt\\..\\File 1.txt") == file_1
+    assert fs.mft.get("Large.txt/..") == root
+
+    # Parent directory relative to a root record uses the $FILE_NAME parent reference
+    assert directory.get("..") == root
+    assert file_1.get("..") == directory
+    assert file_1.get("../..") == root
+    assert file_1.get("../File 1.txt") == file_1
+
+    # The parent of the root directory is the root directory itself
+    assert fs.mft.get("..") == root
+    assert fs.mft.get("../../Directory") == directory
+    assert root.get("..") == root
+
+    # Components are still resolved before traversing back up
+    with pytest.raises(FileNotFoundError):
+        fs.mft.get("Nonexistent/..")
+
+
 def test_ntfs_large_sector(boot_2m_bin: BinaryIO) -> None:
     fs = NTFS(boot=boot_2m_bin)
     assert fs.cluster_size == 0x200000
