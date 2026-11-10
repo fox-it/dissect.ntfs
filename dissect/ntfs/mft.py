@@ -61,6 +61,12 @@ class Mft:
     def _get_path(self, path: str, root: MftRecord | None = None) -> MftRecord:
         """Resolve a file path to the correct MFT record.
 
+        ``.`` and ``..`` path components are normalized lexically first, like Win32 path normalization does
+        (e.g. ``GetFullPathNameW``). This means a ``..`` cancels out the preceding component without that
+        component being looked up, and without following any symlinks or mount points. Any leading ``..``
+        components are resolved from ``root`` using the parent directory reference of its ``$FILE_NAME``
+        attribute. The parent of the root directory is the root directory itself.
+
         Args:
             path: The path to resolve.
             root: Optional root record to start resolving from. Useful for relative path lookups.
@@ -70,14 +76,28 @@ class Mft:
         # Programmatically we will often use the `/` separator, so replace it with the native path separator of NTFS
         # `/` is an illegal character in NTFS filenames, so it's safe to replace
         search_path = path.replace("/", "\\")
-        node = root
 
-        parts = search_path.split("\\")
-
-        for part in parts:
-            if not part:
+        # Lexically normalize "." and ".." components
+        parts: list[str] = []
+        num_parents = 0
+        for part in search_path.split("\\"):
+            if not part or part == ".":
                 continue
 
+            if part == "..":
+                if parts:
+                    parts.pop()
+                else:
+                    num_parents += 1
+                continue
+
+            parts.append(part)
+
+        node = root
+        for _ in range(num_parents):
+            node = self._get_parent(node)
+
+        for part in parts:
             while node.is_symlink() or node.is_mount_point():
                 node = node.reparse_point_record
 
@@ -91,6 +111,22 @@ class Mft:
                 raise FileNotFoundError(f"File not found: {path}")
 
         return node
+
+    def _get_parent(self, record: MftRecord) -> MftRecord:
+        """Return the parent directory record of the given record, using its ``$FILE_NAME`` attribute.
+
+        The root directory (and any record without a ``$FILE_NAME`` attribute) is its own parent.
+        Records with multiple hard links have multiple parents, in which case a non-DOS name is preferred.
+        """
+        if record.segment == FILE_NUMBER_ROOT:
+            return record
+
+        attrs = record.attributes[ATTRIBUTE_TYPE_CODE.FILE_NAME]
+        if not attrs:
+            return record
+
+        attr = next((attr for attr in attrs if attr.flags != FILE_NAME_DOS), attrs[0])
+        return self.get(segment_reference(attr.attr.ParentDirectory))
 
     def get(self, ref: int | str | c_ntfs._MFT_SEGMENT_REFERENCE, root: MftRecord | None = None) -> MftRecord:
         """Retrieve an MFT record using a variety of methods.

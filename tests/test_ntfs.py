@@ -52,6 +52,74 @@ def test_ntfs(ntfs_bin: BinaryIO) -> None:
     assert fs.mft.get("Directory/File 1.txt").full_path() == "Directory\\File 1.txt"
 
 
+def test_ntfs_dot_components(ntfs_bin: BinaryIO) -> None:
+    fs = NTFS(ntfs_bin)
+
+    root = fs.mft.root
+    directory = fs.mft.get("Directory")
+    file_1 = fs.mft.get("Directory/File 1.txt")
+
+    # Current directory components are skipped
+    assert fs.mft.get(".") == root
+    assert fs.mft.get("./Directory/./File 1.txt") == file_1
+    assert directory.get(".") == directory
+
+    # Parent directory components return to the previously traversed record
+    assert fs.mft.get("Directory/..") == root
+    assert fs.mft.get("Directory/../Directory/File 1.txt") == file_1
+    assert fs.mft.get("Directory\\File 1.txt\\..\\File 1.txt") == file_1
+    assert fs.mft.get("Large.txt/..") == root
+
+    # Parent directory relative to a root record uses the $FILE_NAME parent reference
+    assert directory.get("..") == root
+    assert file_1.get("..") == directory
+    assert file_1.get("../..") == root
+    assert file_1.get("../File 1.txt") == file_1
+
+    # The parent of the root directory is the root directory itself
+    assert fs.mft.get("..") == root
+    assert fs.mft.get("../../Directory") == directory
+    assert root.get("..") == root
+
+
+@pytest.mark.parametrize(
+    ("root", "path", "expected"),
+    [
+        pytest.param(None, "Nonexistent/..", None, id="missing-then-parent"),
+        pytest.param(None, "Nonexistent/../File.txt", "File.txt", id="missing-then-parent-then-existing"),
+        pytest.param(None, "Directory/Nonexistent/..", "Directory", id="nested-missing-then-parent"),
+        pytest.param(None, "Directory/Nonexistent/../../Directory", "Directory", id="nested-missing-then-parents"),
+        pytest.param("Directory", "Nonexistent/../File 1.txt", "Directory/File 1.txt", id="relative"),
+    ],
+)
+def test_ntfs_dot_components_missing(ntfs_bin: BinaryIO, root: str | None, path: str, expected: str | None) -> None:
+    """Components cancelled out by a later ``..`` are not looked up, matching Win32 path normalization.
+
+    E.g. ``CreateFileW`` opens ``Nonexistent\\..\\File.txt`` even though ``Nonexistent`` does not exist.
+    """
+    fs = NTFS(ntfs_bin)
+    root_record = fs.mft.get(root) if root else None
+    expected_record = fs.mft.get(expected) if expected else fs.mft.root
+
+    assert fs.mft.get(path, root=root_record) == expected_record
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Nonexistent/../Nonexistent",
+        "./Nonexistent/.",
+        "Directory/../Nonexistent",
+    ],
+)
+def test_ntfs_dot_components_remaining_missing(ntfs_bin: BinaryIO, path: str) -> None:
+    """Components that remain after normalizing ``.`` and ``..`` must still exist."""
+    fs = NTFS(ntfs_bin)
+
+    with pytest.raises(FileNotFoundError):
+        fs.mft.get(path)
+
+
 def test_ntfs_large_sector(boot_2m_bin: BinaryIO) -> None:
     fs = NTFS(boot=boot_2m_bin)
     assert fs.cluster_size == 0x200000
