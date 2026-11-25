@@ -37,6 +37,8 @@ class NTFS:
         mft: A file-like object for the ``$MFT`` file.
         usnjrnl: A file-like object for the ``$Extend/$Usnjrnl:$J`` file.
         sds: A file-like object for the ``$Secure:$SDS`` file.
+        recover: Recover readable MFT metadata from damaged records. Recovery
+            diagnostics are retained on each record in ``errors``.
     """
 
     def __init__(
@@ -46,8 +48,11 @@ class NTFS:
         mft: BinaryIO | None = None,
         usnjrnl: BinaryIO | None = None,
         sds: BinaryIO | None = None,
+        *,
+        recover: bool = False,
     ):
         self.fh = fh
+        self.recover = recover
 
         boot_fh = boot or fh
         if boot_fh:
