@@ -15,6 +15,7 @@ from dissect.ntfs.c_ntfs import (
     FILE_NUMBER_MFT,
     FILE_NUMBER_ROOT,
     IO_REPARSE_TAG,
+    SECTOR_SIZE,
     c_ntfs,
 )
 from dissect.ntfs.exceptions import (
@@ -230,7 +231,7 @@ class MftRecord:
             ntfs: An optional NTFS class instance.
 
         Raises:
-            BrokenMftError: If the MFT record signature is invalid.
+            BrokenMftError: If the MFT record signature, layout, or fixup data is invalid.
         """
         obj = cls()
         obj.ntfs = ntfs
@@ -238,7 +239,31 @@ class MftRecord:
         if data[:4] != b"FILE":
             raise BrokenMftError(f"Invalid MFT record Signature: {data[:4]}")
 
-        obj.data = apply_fixup(data)
+        # Legacy records have a 42-byte fixed header, with the update sequence
+        # array immediately following it. Do not require the larger modern header.
+        header_size = len(c_ntfs._FILE_RECORD_SEGMENT_HEADER)
+        if len(data) < header_size:
+            raise BrokenMftError(f"Invalid MFT record size: {len(data)}")
+
+        header = c_ntfs._FILE_RECORD_SEGMENT_HEADER(data)
+        if len(data) % SECTOR_SIZE or header.BytesAllocated != len(data):
+            raise BrokenMftError(
+                f"Invalid MFT record size: {len(data)} bytes supplied, {header.BytesAllocated} bytes declared"
+            )
+
+        fixup_offset = header.MultiSectorHeader.UpdateSequenceArrayOffset
+        fixup_count = header.MultiSectorHeader.UpdateSequenceArraySize
+        if fixup_count != len(data) // SECTOR_SIZE + 1:
+            raise BrokenMftError(f"Invalid MFT record fixup: Fixup count does not match record size: {fixup_count}")
+
+        fixup_end = fixup_offset + fixup_count * 2
+        if fixup_offset < header_size or fixup_end > header.FirstAttributeOffset or fixup_end > SECTOR_SIZE - 2:
+            raise BrokenMftError(f"Invalid MFT record fixup: Fixup offset out of range: {fixup_offset}")
+
+        try:
+            obj.data = apply_fixup(data)
+        except ValueError as e:
+            raise BrokenMftError(f"Invalid MFT record fixup: {e}") from e
         obj.header = c_ntfs._FILE_RECORD_SEGMENT_HEADER(obj.data)
         return obj
 

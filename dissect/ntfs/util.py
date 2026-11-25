@@ -198,8 +198,10 @@ def apply_fixup(data: bytes) -> bytes:
     if (
         # The fixup offset must be even
         fixup_offset & 1
-        # The end of the fixup array should not exceed SECTOR_SIZE
-        or fixup_offset + (fixup_count + 1) * 2 > SECTOR_SIZE
+        # The array must not overlap the multi-sector header
+        or fixup_offset < 8
+        # The array must end before the first sector's trailer
+        or fixup_offset + (fixup_count + 1) * 2 > SECTOR_SIZE - 2
         # Must have at least one fixup
         or fixup_count == 0
         # And the amount of fixups must match the amount of sectors we have data of
@@ -207,7 +209,7 @@ def apply_fixup(data: bytes) -> bytes:
     ):
         raise ValueError(f"Fixup offset out of range: {fixup_offset}")
 
-    fixup = view[fixup_offset:]
+    fixup = bytes(view[fixup_offset : fixup_offset + (fixup_count + 1) * 2])
     sample = fixup[:2]
     fixup = fixup[2:]
 

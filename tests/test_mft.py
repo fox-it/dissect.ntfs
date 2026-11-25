@@ -5,8 +5,8 @@ from typing import BinaryIO
 
 import pytest
 
-from dissect.ntfs.c_ntfs import FILE_NUMBER_MFT
-from dissect.ntfs.exceptions import MftNotAvailableError, VolumeNotAvailableError
+from dissect.ntfs.c_ntfs import FILE_NUMBER_MFT, FILE_RECORD_SEGMENT_IN_USE
+from dissect.ntfs.exceptions import BrokenMftError, MftNotAvailableError, VolumeNotAvailableError
 from dissect.ntfs.mft import Mft, MftRecord
 from dissect.ntfs.ntfs import NTFS
 
@@ -19,6 +19,31 @@ def test_mft(mft_bin: BinaryIO) -> None:
 
     with pytest.raises(VolumeNotAvailableError):
         assert fs.mft.get(FILE_NUMBER_MFT).open()
+
+
+@pytest.mark.parametrize("corrupt_offset", [4, 510])
+def test_mft_segments_skips_fixup_errors(mft_bin: BinaryIO, corrupt_offset: int) -> None:
+    """A malformed record must not hide later readable records, including deleted files."""
+    data = bytearray(mft_bin.read())
+    original = NTFS(mft=io.BytesIO(data))
+    expected = {record.segment: record.filenames() for record in original.mft.segments()}
+    del expected[1]
+
+    # Damage either the fixup offset or a sector trailer in $MFTMirr.
+    data[1024 + corrupt_offset] ^= 1
+    # Mark the later Random.bin record as deleted.
+    data[33 * 1024 + 22] &= ~FILE_RECORD_SEGMENT_IN_USE
+    fs = NTFS(mft=io.BytesIO(data))
+
+    records = {record.segment: record for record in fs.mft.segments()}
+    assert {segment: record.filenames() for segment, record in records.items()} == expected
+    assert records[33].filename == "Random.bin"
+    assert not records[33].header.Flags & FILE_RECORD_SEGMENT_IN_USE
+
+    # Direct access must still reject the damaged record with a parser error.
+    with pytest.raises(BrokenMftError, match=r"[Ff]ixup") as exc_info:
+        fs.mft.get(1)
+    assert isinstance(exc_info.value.__cause__, ValueError)
 
 
 def test_mft_record_get_no_mft(mft_bin: BinaryIO) -> None:
