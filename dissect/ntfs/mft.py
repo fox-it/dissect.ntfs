@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import ntpath
+from collections import defaultdict
 from functools import cached_property, lru_cache
-from io import BytesIO
+from io import SEEK_END, BytesIO
 from operator import itemgetter
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -14,6 +15,7 @@ from dissect.ntfs.c_ntfs import (
     FILE_NAME_DOS,
     FILE_NUMBER_MFT,
     FILE_NUMBER_ROOT,
+    FILE_RECORD_SEGMENT_IN_USE,
     IO_REPARSE_TAG,
     SECTOR_SIZE,
     c_ntfs,
@@ -155,12 +157,39 @@ class Mft:
 
             record = MftRecord.from_fh(self.fh, ref * record_size, ntfs=self.ntfs, recover=self.recover)
             record.segment = ref
+            record._mft = self
             return record
 
         if isinstance(ref, str):
             return self._get_path(ref, root)
 
         raise TypeError(f"Invalid MFT reference: {ref!r}")
+
+    @cached_property
+    def _extension_index(self) -> dict[tuple[int, int], list[int]]:
+        """Index verified physical extension slots once, without following attribute lists."""
+        record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
+        index = defaultdict(list)
+        position = self.fh.tell()
+        try:
+            self.fh.seek(0, SEEK_END)
+            count = self.fh.tell() // record_size
+            for segment in range(count):
+                self.fh.seek(segment * record_size)
+                data = self.fh.read(record_size)
+                # The fixed-header base reference is only a hint until layout and
+                # sector fixups have been verified. Do not cache every base record.
+                if data[:4] != b"FILE" or not int.from_bytes(data[32:40], "little"):
+                    continue
+                try:
+                    record = MftRecord.from_bytes(data, self.ntfs, recover=False)
+                except (BrokenMftError, EOFError, ValueError):
+                    continue
+                base = record.header.BaseFileRecordSegment
+                index[(segment_reference(base), base.SequenceNumber)].append(segment)
+        finally:
+            self.fh.seek(position)
+        return dict(index)
 
     def segments(self, start: int = 0, end: int = -1) -> Iterator[MftRecord]:
         """Yield all valid MFT records, regardless if they're allocated or not.
@@ -192,6 +221,7 @@ class MftRecord:
 
     def __init__(self):
         self.ntfs: NTFS | None = None
+        self._mft: Mft | None = None
         self.segment: int | None = None
         self.offset: int | None = None
         self.data: bytes | None = None
@@ -304,7 +334,10 @@ class MftRecord:
 
         ``$ATTRIBUTE_LIST``'s are only parsed if there's an MFT available on the NTFS object.
         Recovery retains validated attributes before malformed data and from readable
-        extensions. Check :attr:`attributes_complete` and :attr:`errors` before using
+        extensions. For an unavailable nonresident list, recovery can infer extensions
+        from verified physical records with an exact base reference and matching
+        allocation state. This requires one scan of the supplied MFT stream.
+        Check :attr:`attributes_complete` and :attr:`errors` before using
         recovered metadata. Record-level stream access is refused when attributes
         are incomplete or fixup data was recovered. Individual attribute objects
         remain available for inspecting raw evidence.
@@ -315,11 +348,36 @@ class MftRecord:
         if self._attributes_loading:
             raise BrokenMftError("Recursive attribute list")
 
+        attrs = self._parse_attributes()
+        attr_list = None
+        unavailable_list = False
+        for attr in attrs[ATTRIBUTE_TYPE_CODE.ATTRIBUTE_LIST]:
+            if attr.attribute:
+                attr_list = attr
+            elif self.recover:
+                self._mark_attributes_incomplete("attribute list requires unavailable volume data")
+                unavailable_list = True
+
+        if attr_list and self.ntfs and self.ntfs.mft:
+            self._attributes_loading = True
+            try:
+                for attr in attr_list.attributes():
+                    attrs.add(attr)
+            finally:
+                self._attributes_loading = False
+        elif attr_list and self.recover:
+            self._mark_attributes_incomplete("attribute list requires an unavailable MFT")
+        elif unavailable_list:
+            self._recover_extensions(attrs)
+
+        return attrs
+
+    def _parse_attributes(self) -> AttributeMap:
+        """Parse only this record's validated attributes, without following references."""
         fh = BytesIO(self.data)
         offset = self.header.FirstAttributeOffset
         limit = min(self.header.BytesInUse, len(self.data))
         attrs = AttributeMap()
-        attr_list = None
 
         while True:
             try:
@@ -339,34 +397,61 @@ class MftRecord:
 
             attrs.add(attr)
 
-            # Nonresident lists need volume data; keep their presence visible even
-            # when only a detached MFT is available.
-            if header.type == ATTRIBUTE_TYPE_CODE.ATTRIBUTE_LIST:
-                if attr.attribute:
-                    attr_list = attr
-                elif self.recover:
-                    self._mark_attributes_incomplete("attribute list requires unavailable volume data")
-
             offset += header.record_length
 
-        if attr_list and self.ntfs and self.ntfs.mft:
-            self._attributes_loading = True
-            try:
-                for attr in attr_list.attributes():
-                    attrs.add(attr)
-            finally:
-                self._attributes_loading = False
-        elif attr_list and self.recover:
-            self._mark_attributes_incomplete("attribute list requires an unavailable MFT")
-
         return attrs
+
+    def _recover_extensions(self, attrs: AttributeMap) -> None:
+        """Infer local extension metadata without claiming a complete attribute set."""
+        base = self.header.BaseFileRecordSegment
+        mft = self._mft or (self.ntfs.mft if self.ntfs else None)
+        if (
+            not mft
+            or self.segment is None
+            or segment_reference(base)
+            or base.SequenceNumber
+            or any(error.startswith("fixup:") for error in self.errors)
+        ):
+            return
+
+        try:
+            segments = mft._extension_index.get((self.segment, self.header.SequenceNumber), [])
+        except (EOFError, OSError, ValueError) as e:
+            self._mark_attributes_incomplete(f"extension scan: {e}")
+            return
+
+        for segment in segments:
+            try:
+                extension = mft.get(segment)
+                reference = extension.header.BaseFileRecordSegment
+                if (
+                    segment == self.segment
+                    or segment_reference(reference) != self.segment
+                    or reference.SequenceNumber != self.header.SequenceNumber
+                    or (self.header.Flags ^ extension.header.Flags) & FILE_RECORD_SEGMENT_IN_USE
+                    or any(error.startswith("fixup:") for error in extension.errors)
+                ):
+                    continue
+                # Only inspect the physical extension itself. A list stored in an
+                # extension must not cause recursive or unrelated records to merge.
+                for collection in extension._parse_attributes().values():
+                    for attr in collection:
+                        attrs.add(attr)
+                self._mark_attributes_incomplete(
+                    f"extension {segment}: inferred from base reference; attribute list unavailable"
+                )
+                if not extension._attributes_complete:
+                    self._mark_attributes_incomplete(f"extension {segment}: incomplete recovered attributes")
+            except (Error, EOFError, OSError, ValueError) as e:
+                self._mark_attributes_incomplete(f"extension {segment}: {e}")
 
     @property
     def attributes_complete(self) -> bool:
         """Whether attribute parsing and available extension resolution completed.
 
         This does not establish the availability or integrity of external file data.
-        A detached MFT cannot resolve a nonresident attribute list without a volume.
+        Inferred extensions do not establish completeness when a detached MFT's
+        nonresident attribute list cannot be read from a volume.
         """
         _ = self.attributes
         return self._attributes_complete
