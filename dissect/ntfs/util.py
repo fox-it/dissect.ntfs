@@ -180,11 +180,13 @@ class AttributeCollection(list):
         return runs
 
 
-def apply_fixup(data: bytes) -> bytes:
+def apply_fixup(data: bytes, *, ignore_mismatch: bool = False) -> bytes:
     """Parse and apply fixup data from ``MULTI_SECTOR_HEADER`` to the given bytes.
 
     Args:
         data: The bytes to fixup
+        ignore_mismatch: Apply replacement words even when sector trailers do not match.
+            Array layout validation remains mandatory.
 
     Returns:
         The fixed up bytes.
@@ -215,7 +217,7 @@ def apply_fixup(data: bytes) -> bytes:
 
     ptr = view[SECTOR_SIZE - 2 :]
     for _ in range(fixup_count):
-        if ptr[:2] != sample:
+        if not ignore_mismatch and ptr[:2] != sample:
             raise ValueError("Fixup mismatch")
 
         ptr[:2] = fixup[:2]

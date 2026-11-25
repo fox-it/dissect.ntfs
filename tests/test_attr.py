@@ -17,7 +17,8 @@ def resident_attribute(contents: bytes) -> bytes:
     return (header + contents).ljust(length, b"\x00")
 
 
-def test_short_resident_attribute_at_end_of_record() -> None:
+@pytest.mark.parametrize("recover", [False, True])
+def test_short_resident_attribute_at_end_of_record(recover: bool) -> None:
     # The 40-byte $DSC attribute at offset 0x3c0 of Server2022 APTSimulatorVM
     # record 4074. Its 24-byte resident header fits; the 72-byte union does not.
     short_attribute = bytes.fromhex("00010000280000000004180000000300080000002000000024004400530043000200000000000000")
@@ -30,12 +31,14 @@ def test_short_resident_attribute_at_end_of_record() -> None:
     data[48:54] = b"\xaa\xaa" + data[510:512] + data[1022:1024]
     data[510:512] = data[1022:1024] = b"\xaa\xaa"
 
-    record = MftRecord.from_bytes(data)
+    record = MftRecord.from_bytes(data, recover=recover)
 
     attribute = record.attributes[ATTRIBUTE_TYPE_CODE.LOGGED_UTILITY_STREAM][0]
     assert attribute.name == "$DSC"
     assert attribute.data() == b"\x02" + bytes(7)
     assert record.open().read() == contents
+    assert record.attributes_complete
+    assert record.errors == []
 
 
 @pytest.mark.parametrize("length", [0, 1, 8, 16, 40])
