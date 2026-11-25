@@ -11,6 +11,7 @@ from dissect.ntfs.c_ntfs import (
     ATTRIBUTE_FLAG_COMPRESSION_MASK,
     ATTRIBUTE_TYPE_CODE,
     FILE_NUMBER_ROOT,
+    FILE_RECORD_SEGMENT_IN_USE,
     SECTOR_SHIFT,
     SECTOR_SIZE,
 )
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from dissect.ntfs.c_ntfs import (
         c_ntfs,
     )
-    from dissect.ntfs.mft import Mft
+    from dissect.ntfs.mft import Mft, MftRecord
     from dissect.ntfs.ntfs import NTFS
 
 
@@ -240,13 +241,21 @@ def ensure_volume(ntfs: NTFS) -> None:
         raise VolumeNotAvailableError
 
 
-def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, seen: set[str] | None = None) -> str:
+def get_full_path(
+    mft: Mft,
+    name: str,
+    parent: c_ntfs._MFT_SEGMENT_REFERENCE,
+    seen: set[int] | None = None,
+    *,
+    source: MftRecord | None = None,
+) -> str:
     """Walk up parent file references to construct a full path.
 
     Args:
         mft: The MFT object to use for looking up file references.
         name: The file name to use.
         parent: The parent reference to start backtracking from.
+        source: The record containing this filename, used for deleted-path recovery and diagnostics.
 
     Raises:
         FilenameNotAvailableError: If an MFT record has no filename.
@@ -254,6 +263,7 @@ def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, se
     seen = seen or set()
 
     path = [name]
+    child = source
 
     while True:
         parent_ref = segment_reference(parent)
@@ -272,11 +282,32 @@ def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, se
                 raise FilenameNotAvailableError("No filename")  # noqa: TRY301
 
             if record.header.SequenceNumber != parent.SequenceNumber:
-                path.append(f"<broken_reference_0x{parent_ref:x}#{parent.SequenceNumber}>")
-                break
+                # Deallocation increments the sequence, including 0xffff -> 0.
+                # Allocation may replace zero with one, so 0xffff -> 1 is not safe
+                # to accept. Never use this rule for an active child or parent.
+                if (
+                    mft.recover
+                    and source is not None
+                    and child is not None
+                    and not child.header.Flags & FILE_RECORD_SEGMENT_IN_USE
+                    and not record.header.Flags & FILE_RECORD_SEGMENT_IN_USE
+                    and record.is_dir()
+                    and parent.SequenceNumber != 0
+                    and record.header.SequenceNumber == ((parent.SequenceNumber + 1) & 0xFFFF)
+                ):
+                    message = (
+                        f"Recovered deleted parent {parent_ref} from sequence "
+                        f"{parent.SequenceNumber} to {record.header.SequenceNumber}"
+                    )
+                    if message not in source.errors:
+                        source.errors.append(message)
+                else:
+                    path.append(f"<broken_reference_0x{parent_ref:x}#{parent.SequenceNumber}>")
+                    break
 
             path.append(record.filename)
 
+            child = record
             parent = record.attributes.FILE_NAME.attr.ParentDirectory
         except Exception:
             path.append(f"<unknown_segment_0x{parent_ref:x}>")

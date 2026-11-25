@@ -537,7 +537,7 @@ class FileName(AttributeRecord):
 
     def full_path(self) -> str:
         """Use the parent directory reference to try to generate a full path from this file name."""
-        return get_full_path(self.record.ntfs.mft, self.file_name, self.attr.ParentDirectory)
+        return get_full_path(self.record.ntfs.mft, self.file_name, self.attr.ParentDirectory, source=self.record)
 
     def is_dir(self) -> bool:
         """Return whether this ``$FILE_NAME`` attribute represents a directory."""
