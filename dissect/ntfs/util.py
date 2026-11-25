@@ -11,6 +11,7 @@ from dissect.ntfs.c_ntfs import (
     ATTRIBUTE_FLAG_COMPRESSION_MASK,
     ATTRIBUTE_TYPE_CODE,
     FILE_NUMBER_ROOT,
+    FILE_RECORD_SEGMENT_IN_USE,
     SECTOR_SHIFT,
     SECTOR_SIZE,
 )
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from dissect.ntfs.c_ntfs import (
         c_ntfs,
     )
-    from dissect.ntfs.mft import Mft
+    from dissect.ntfs.mft import Mft, MftRecord
     from dissect.ntfs.ntfs import NTFS
 
 
@@ -180,11 +181,13 @@ class AttributeCollection(list):
         return runs
 
 
-def apply_fixup(data: bytes) -> bytes:
+def apply_fixup(data: bytes, *, ignore_mismatch: bool = False) -> bytes:
     """Parse and apply fixup data from ``MULTI_SECTOR_HEADER`` to the given bytes.
 
     Args:
         data: The bytes to fixup
+        ignore_mismatch: Apply replacement words even when sector trailers do not match.
+            Array layout validation remains mandatory.
 
     Returns:
         The fixed up bytes.
@@ -198,8 +201,10 @@ def apply_fixup(data: bytes) -> bytes:
     if (
         # The fixup offset must be even
         fixup_offset & 1
-        # The end of the fixup array should not exceed SECTOR_SIZE
-        or fixup_offset + (fixup_count + 1) * 2 > SECTOR_SIZE
+        # The array must not overlap the multi-sector header
+        or fixup_offset < 8
+        # The array must end before the first sector's trailer
+        or fixup_offset + (fixup_count + 1) * 2 > SECTOR_SIZE - 2
         # Must have at least one fixup
         or fixup_count == 0
         # And the amount of fixups must match the amount of sectors we have data of
@@ -207,13 +212,13 @@ def apply_fixup(data: bytes) -> bytes:
     ):
         raise ValueError(f"Fixup offset out of range: {fixup_offset}")
 
-    fixup = view[fixup_offset:]
+    fixup = bytes(view[fixup_offset : fixup_offset + (fixup_count + 1) * 2])
     sample = fixup[:2]
     fixup = fixup[2:]
 
     ptr = view[SECTOR_SIZE - 2 :]
     for _ in range(fixup_count):
-        if ptr[:2] != sample:
+        if not ignore_mismatch and ptr[:2] != sample:
             raise ValueError("Fixup mismatch")
 
         ptr[:2] = fixup[:2]
@@ -236,13 +241,21 @@ def ensure_volume(ntfs: NTFS) -> None:
         raise VolumeNotAvailableError
 
 
-def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, seen: set[str] | None = None) -> str:
+def get_full_path(
+    mft: Mft,
+    name: str,
+    parent: c_ntfs._MFT_SEGMENT_REFERENCE,
+    seen: set[int] | None = None,
+    *,
+    source: MftRecord | None = None,
+) -> str:
     """Walk up parent file references to construct a full path.
 
     Args:
         mft: The MFT object to use for looking up file references.
         name: The file name to use.
         parent: The parent reference to start backtracking from.
+        source: The record containing this filename, used for deleted-path recovery and diagnostics.
 
     Raises:
         FilenameNotAvailableError: If an MFT record has no filename.
@@ -250,6 +263,7 @@ def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, se
     seen = seen or set()
 
     path = [name]
+    child = source
 
     while True:
         parent_ref = segment_reference(parent)
@@ -268,11 +282,32 @@ def get_full_path(mft: Mft, name: str, parent: c_ntfs._MFT_SEGMENT_REFERENCE, se
                 raise FilenameNotAvailableError("No filename")  # noqa: TRY301
 
             if record.header.SequenceNumber != parent.SequenceNumber:
-                path.append(f"<broken_reference_0x{parent_ref:x}#{parent.SequenceNumber}>")
-                break
+                # Deallocation increments the sequence, including 0xffff -> 0.
+                # Allocation may replace zero with one, so 0xffff -> 1 is not safe
+                # to accept. Never use this rule for an active child or parent.
+                if (
+                    mft.recover
+                    and source is not None
+                    and child is not None
+                    and not child.header.Flags & FILE_RECORD_SEGMENT_IN_USE
+                    and not record.header.Flags & FILE_RECORD_SEGMENT_IN_USE
+                    and record.is_dir()
+                    and parent.SequenceNumber != 0
+                    and record.header.SequenceNumber == ((parent.SequenceNumber + 1) & 0xFFFF)
+                ):
+                    message = (
+                        f"Recovered deleted parent {parent_ref} from sequence "
+                        f"{parent.SequenceNumber} to {record.header.SequenceNumber}"
+                    )
+                    if message not in source.errors:
+                        source.errors.append(message)
+                else:
+                    path.append(f"<broken_reference_0x{parent_ref:x}#{parent.SequenceNumber}>")
+                    break
 
             path.append(record.filename)
 
+            child = record
             parent = record.attributes.FILE_NAME.attr.ParentDirectory
         except Exception:
             path.append(f"<unknown_segment_0x{parent_ref:x}>")
