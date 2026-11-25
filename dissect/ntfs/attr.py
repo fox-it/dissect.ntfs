@@ -124,7 +124,18 @@ class AttributeHeader:
         self.record = record
 
         fh.seek(offset)
-        self.header = c_ntfs._ATTRIBUTE_RECORD_HEADER(fh)
+        data = fh.read(24)
+        if len(data) != 24:
+            raise EOFError("Truncated attribute header")
+
+        header_size = len(c_ntfs._ATTRIBUTE_RECORD_HEADER)
+        if data[8] == 0:
+            # Resident headers are only 24 bytes. Pad the unused nonresident
+            # union without reading beyond the actual resident header.
+            data = data.ljust(header_size, b"\x00")
+        else:
+            data += fh.read(header_size - len(data))
+        self.header = c_ntfs._ATTRIBUTE_RECORD_HEADER(data)
 
     def __repr__(self) -> str:
         return f"<${self.type.name} size={self.size}>"
