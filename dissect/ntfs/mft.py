@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ntpath
 from functools import cached_property, lru_cache
-from io import BytesIO
+from io import SEEK_END, BytesIO
 from operator import itemgetter
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -158,18 +158,39 @@ class Mft:
 
         raise TypeError(f"Invalid MFT reference: {ref!r}")
 
-    def segments(self, start: int = 0, end: int = -1) -> Iterator[MftRecord]:
+    def segments(self, start: int = 0, end: int = -1, *, physical: bool = False) -> Iterator[MftRecord]:
         """Yield all valid MFT records, regardless if they're allocated or not.
 
         Args:
             start: The starting segment number. Use ``-1`` to start from the last segment.
             end: The ending segment number. Use ``-1`` to end with the last segment.
+            physical: Scan complete record slots in the supplied stream instead of using the size declared by
+                the ``$MFT`` record. This allows scanning incomplete or damaged acquisitions without a readable
+                record zero. The stream must support seeking to its end. Start and end are clipped to its bounds.
         """
         record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
-        last_segment = self.get(FILE_NUMBER_MFT).size() // record_size
+        if physical:
+            position = self.fh.tell()
+            try:
+                self.fh.seek(0, SEEK_END)
+                size = self.fh.tell()
+            finally:
+                self.fh.seek(position)
+        else:
+            size = self.get(FILE_NUMBER_MFT).size()
+
+        last_segment = size // record_size - 1
+        if last_segment < 0:
+            return
+
         start = last_segment if start == -1 else start
         end = last_segment if end == -1 else end
         step = 1 if start <= end else -1
+        if physical:
+            if step == 1:
+                start, end = max(start, 0), min(end, last_segment)
+            else:
+                start, end = min(start, last_segment), max(end, 0)
 
         for segment in range(start, end + step, step):
             try:
@@ -177,7 +198,8 @@ class Mft:
             except Error:  # noqa: PERF203
                 continue
             except EOFError:
-                break
+                if not physical:
+                    break
 
 
 class MftRecord:
