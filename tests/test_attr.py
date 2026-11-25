@@ -1,12 +1,71 @@
 from __future__ import annotations
 
 import datetime
+import struct
 
 import pytest
 
 from dissect.ntfs.attr import Attribute, FileName, StandardInformation
 from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, IO_REPARSE_TAG
 from dissect.ntfs.exceptions import VolumeNotAvailableError
+from dissect.ntfs.mft import MftRecord
+
+
+def resident_attribute(contents: bytes) -> bytes:
+    length = (24 + len(contents) + 7) & ~7
+    header = struct.pack("<IIBBHHHIHBB", 0x80, length, 0, 0, 0, 0, 0, len(contents), 24, 0, 0)
+    return (header + contents).ljust(length, b"\x00")
+
+
+@pytest.mark.parametrize("recover", [False, True])
+def test_short_resident_attribute_at_end_of_record(recover: bool) -> None:
+    # The 40-byte $DSC attribute at offset 0x3c0 of Server2022 APTSimulatorVM
+    # record 4074. Its 24-byte resident header fits; the 72-byte union does not.
+    short_attribute = bytes.fromhex("00010000280000000004180000000300080000002000000024004400530043000200000000000000")
+    contents = b"x" * (0x3C0 - 56 - 24)
+    payload = resident_attribute(contents) + short_attribute + b"\xff\xff\xff\xff\x00\x00\x00\x00"
+    data = bytearray(1024)
+    struct.pack_into("<4sHH", data, 0, b"FILE", 48, 3)
+    struct.pack_into("<HHII", data, 20, 56, 1, 56 + len(payload), 1024)
+    data[56 : 56 + len(payload)] = payload
+    data[48:54] = b"\xaa\xaa" + data[510:512] + data[1022:1024]
+    data[510:512] = data[1022:1024] = b"\xaa\xaa"
+
+    record = MftRecord.from_bytes(data, recover=recover)
+
+    attribute = record.attributes[ATTRIBUTE_TYPE_CODE.LOGGED_UTILITY_STREAM][0]
+    assert attribute.name == "$DSC"
+    assert attribute.data() == b"\x02" + bytes(7)
+    assert record.open().read() == contents
+    assert record.attributes_complete
+    assert record.errors == []
+
+
+@pytest.mark.parametrize("length", [0, 1, 8, 16, 40])
+def test_standalone_short_resident_attribute(length: int) -> None:
+    contents = bytes(range(length))
+    attribute = Attribute.from_bytes(resident_attribute(contents))
+    assert attribute.resident
+    assert attribute.data() == contents
+
+
+@pytest.mark.parametrize("length", [0, 8, 16, 23])
+def test_truncated_resident_header_still_fails(length: int) -> None:
+    with pytest.raises(EOFError):
+        Attribute.from_bytes(resident_attribute(b"")[:length])
+
+
+def test_nonresident_header_preserves_total_allocated() -> None:
+    data = (
+        struct.pack("<IIBBHHH", 0x80, 80, 1, 0, 0, 1, 0)
+        + struct.pack("<QQHB5sQQQQ", 0, 15, 72, 4, bytes(5), 65536, 60000, 60000, 32768)
+        + b"\x11\x08\x20\x01\x08\x00\x00\x00"
+    )
+    attribute = Attribute.from_bytes(data)
+    assert not attribute.resident
+    assert attribute.header.header.Form.Nonresident.TotalAllocated == 32768
+    assert attribute.header.compression_unit == 4
+    assert attribute.dataruns() == [(32, 8), (None, 8)]
 
 
 def test_attributes() -> None:

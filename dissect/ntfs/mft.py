@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import ntpath
+from collections import defaultdict
 from functools import cached_property, lru_cache
-from io import BytesIO
+from io import SEEK_END, BytesIO
 from operator import itemgetter
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -14,7 +15,9 @@ from dissect.ntfs.c_ntfs import (
     FILE_NAME_DOS,
     FILE_NUMBER_MFT,
     FILE_NUMBER_ROOT,
+    FILE_RECORD_SEGMENT_IN_USE,
     IO_REPARSE_TAG,
+    SECTOR_SIZE,
     c_ntfs,
 )
 from dissect.ntfs.exceptions import (
@@ -42,11 +45,14 @@ class Mft:
     Args:
         fh: A file-like object of the $MFT file.
         ntfs: An optional NTFS class instance.
+        recover: Recover readable metadata from damaged records and retain diagnostics.
+            Defaults to the NTFS context's policy, or strict parsing without a context.
     """
 
-    def __init__(self, fh: BinaryIO, ntfs: NTFS | None = None):
+    def __init__(self, fh: BinaryIO, ntfs: NTFS | None = None, *, recover: bool | None = None):
         self.fh = fh
         self.ntfs = ntfs
+        self.recover = ntfs.recover if recover is None and ntfs else bool(recover)
 
         self.get = lru_cache(4096)(self.get)
 
@@ -149,14 +155,41 @@ class Mft:
         if isinstance(ref, int):
             record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
 
-            record = MftRecord.from_fh(self.fh, ref * record_size, ntfs=self.ntfs)
+            record = MftRecord.from_fh(self.fh, ref * record_size, ntfs=self.ntfs, recover=self.recover)
             record.segment = ref
+            record._mft = self
             return record
 
         if isinstance(ref, str):
             return self._get_path(ref, root)
 
         raise TypeError(f"Invalid MFT reference: {ref!r}")
+
+    @cached_property
+    def _extension_index(self) -> dict[tuple[int, int], list[int]]:
+        """Index verified physical extension slots once, without following attribute lists."""
+        record_size = self.ntfs._record_size if self.ntfs else DEFAULT_RECORD_SIZE
+        index = defaultdict(list)
+        position = self.fh.tell()
+        try:
+            self.fh.seek(0, SEEK_END)
+            count = self.fh.tell() // record_size
+            for segment in range(count):
+                self.fh.seek(segment * record_size)
+                data = self.fh.read(record_size)
+                # The fixed-header base reference is only a hint until layout and
+                # sector fixups have been verified. Do not cache every base record.
+                if data[:4] != b"FILE" or not int.from_bytes(data[32:40], "little"):
+                    continue
+                try:
+                    record = MftRecord.from_bytes(data, self.ntfs, recover=False)
+                except (BrokenMftError, EOFError, ValueError):
+                    continue
+                base = record.header.BaseFileRecordSegment
+                index[(segment_reference(base), base.SequenceNumber)].append(segment)
+        finally:
+            self.fh.seek(position)
+        return dict(index)
 
     def segments(self, start: int = 0, end: int = -1) -> Iterator[MftRecord]:
         """Yield all valid MFT records, regardless if they're allocated or not.
@@ -188,10 +221,15 @@ class MftRecord:
 
     def __init__(self):
         self.ntfs: NTFS | None = None
+        self._mft: Mft | None = None
         self.segment: int | None = None
         self.offset: int | None = None
         self.data: bytes | None = None
         self.header: c_ntfs._FILE_RECORD_SEGMENT_HEADER | None = None
+        self._attributes_complete = True
+        self._attributes_loading = False
+        self.recover = False
+        self.errors: list[str] = []
 
     def __repr__(self) -> str:
         return f"<MftRecord {self.segment}#{self.header.SequenceNumber}>"
@@ -204,41 +242,76 @@ class MftRecord:
     __hash__ = object.__hash__
 
     @classmethod
-    def from_fh(cls, fh: BinaryIO, offset: int, ntfs: NTFS | None = None) -> MftRecord:
+    def from_fh(cls, fh: BinaryIO, offset: int, ntfs: NTFS | None = None, *, recover: bool | None = None) -> MftRecord:
         """Parse an MFT record from a file-like object.
 
         Args:
             fh: The file-like object to parse an MFT record from.
             offset: The offset in the file-like object to parse the MFT record from.
             ntfs: An optional NTFS class instance.
+            recover: Override the NTFS context's metadata recovery policy.
         """
         record_size = ntfs._record_size if ntfs else DEFAULT_RECORD_SIZE
 
         fh.seek(offset)
         data = fh.read(record_size)
 
-        obj = cls.from_bytes(data, ntfs)
+        obj = cls.from_bytes(data, ntfs, recover=recover)
         obj.offset = offset
         return obj
 
     @classmethod
-    def from_bytes(cls, data: bytes, ntfs: NTFS | None = None) -> MftRecord:
+    def from_bytes(cls, data: bytes, ntfs: NTFS | None = None, *, recover: bool | None = None) -> MftRecord:
         """Parse an MFT record from bytes.
 
         Args:
             data: The bytes object to parse an MFT record from.
             ntfs: An optional NTFS class instance.
+            recover: Override the NTFS context's metadata recovery policy. Recovery
+                retains validation failures in ``errors`` and does not certify the
+                integrity of a damaged record.
 
         Raises:
-            BrokenMftError: If the MFT record signature is invalid.
+            BrokenMftError: If the MFT record signature, layout, or fixup data is invalid.
         """
         obj = cls()
         obj.ntfs = ntfs
+        obj.recover = ntfs.recover if recover is None and ntfs else bool(recover)
 
         if data[:4] != b"FILE":
             raise BrokenMftError(f"Invalid MFT record Signature: {data[:4]}")
 
-        obj.data = apply_fixup(data)
+        # Legacy records have a 42-byte fixed header, with the update sequence
+        # array immediately following it. Do not require the larger modern header.
+        header_size = len(c_ntfs._FILE_RECORD_SEGMENT_HEADER)
+        if len(data) < header_size:
+            raise BrokenMftError(f"Invalid MFT record size: {len(data)}")
+
+        header = c_ntfs._FILE_RECORD_SEGMENT_HEADER(data)
+        if len(data) % SECTOR_SIZE or header.BytesAllocated != len(data):
+            raise BrokenMftError(
+                f"Invalid MFT record size: {len(data)} bytes supplied, {header.BytesAllocated} bytes declared"
+            )
+
+        fixup_offset = header.MultiSectorHeader.UpdateSequenceArrayOffset
+        fixup_count = header.MultiSectorHeader.UpdateSequenceArraySize
+        if fixup_count != len(data) // SECTOR_SIZE + 1:
+            raise BrokenMftError(f"Invalid MFT record fixup: Fixup count does not match record size: {fixup_count}")
+
+        fixup_end = fixup_offset + fixup_count * 2
+        if fixup_offset < header_size or fixup_end > header.FirstAttributeOffset or fixup_end > SECTOR_SIZE - 2:
+            raise BrokenMftError(f"Invalid MFT record fixup: Fixup offset out of range: {fixup_offset}")
+
+        try:
+            obj.data = apply_fixup(data)
+        except ValueError as e:
+            if not obj.recover:
+                raise BrokenMftError(f"Invalid MFT record fixup: {e}") from e
+            try:
+                obj.data = apply_fixup(data, ignore_mismatch=True)
+            except ValueError as recovery_error:
+                raise BrokenMftError(f"Invalid MFT record fixup: {recovery_error}") from recovery_error
+            obj.errors.append(f"fixup: {e}")
         obj.header = c_ntfs._FILE_RECORD_SEGMENT_HEADER(obj.data)
         return obj
 
@@ -260,43 +333,158 @@ class MftRecord:
         """Parse and return the attributes in this MFT record.
 
         ``$ATTRIBUTE_LIST``'s are only parsed if there's an MFT available on the NTFS object.
+        Recovery retains validated attributes before malformed data and from readable
+        extensions. For an unavailable nonresident list, recovery can infer extensions
+        from verified physical records with an exact base reference and matching
+        allocation state. This requires one scan of the supplied MFT stream.
+        Check :attr:`attributes_complete` and :attr:`errors` before using
+        recovered metadata. Record-level stream access is refused when attributes
+        are incomplete or fixup data was recovered. Individual attribute objects
+        remain available for inspecting raw evidence.
 
         Raises:
-            BrokenMftError: If an error occurred parsing the attributes.
+            BrokenMftError: If an error occurred parsing the attributes in strict mode.
         """
+        if self._attributes_loading:
+            raise BrokenMftError("Recursive attribute list")
+
+        attrs = self._parse_attributes()
+        attr_list = None
+        unavailable_list = False
+        for attr in attrs[ATTRIBUTE_TYPE_CODE.ATTRIBUTE_LIST]:
+            if attr.attribute:
+                attr_list = attr
+            elif self.recover:
+                self._mark_attributes_incomplete("attribute list requires unavailable volume data")
+                unavailable_list = True
+
+        if attr_list and self.ntfs and self.ntfs.mft:
+            self._attributes_loading = True
+            try:
+                for attr in attr_list.attributes():
+                    attrs.add(attr)
+            finally:
+                self._attributes_loading = False
+        elif attr_list and self.recover:
+            self._mark_attributes_incomplete("attribute list requires an unavailable MFT")
+        elif unavailable_list:
+            self._recover_extensions(attrs)
+
+        return attrs
+
+    def _parse_attributes(self) -> AttributeMap:
+        """Parse only this record's validated attributes, without following references."""
         fh = BytesIO(self.data)
         offset = self.header.FirstAttributeOffset
+        limit = min(self.header.BytesInUse, len(self.data))
         attrs = AttributeMap()
 
-        attr_list = None
         while True:
             try:
+                self._validate_attribute_offset(offset, limit)
+                if int.from_bytes(self.data[offset : offset + 4], "little") == ATTRIBUTE_TYPE_CODE.END:
+                    break
+
                 header = AttributeHeader(fh, offset, self)
-            except EOFError:
+                self._validate_attribute_bounds(header, limit)
+                attr = Attribute(header, self)
+            except (BrokenMftError, EOFError, ValueError) as e:
+                message = f"attribute at offset {offset:#x}: {e}"
+                if not self.recover:
+                    raise BrokenMftError(message) from e
+                self._mark_attributes_incomplete(message)
                 break
 
-            if header.type == ATTRIBUTE_TYPE_CODE.END:
-                break
-
-            if header.record_length == 0:
-                raise BrokenMftError("Attribute RecordLength is 0 but end not yet reached")
-
-            attr = Attribute(header, self)
             attrs.add(attr)
-
-            # If we encounter an attribute list, store it for later use
-            # The attribute list can be non-resident, so we need to check if parsing succeeded
-            # by checking if attr.attribute exists, in the case we don't have a volume
-            if header.type == ATTRIBUTE_TYPE_CODE.ATTRIBUTE_LIST and attr.attribute:
-                attr_list = attr
 
             offset += header.record_length
 
-        if attr_list and self.ntfs and self.ntfs.mft:
-            for attr in attr_list.attributes():
-                attrs.add(attr)
-
         return attrs
+
+    def _recover_extensions(self, attrs: AttributeMap) -> None:
+        """Infer local extension metadata without claiming a complete attribute set."""
+        base = self.header.BaseFileRecordSegment
+        mft = self._mft or (self.ntfs.mft if self.ntfs else None)
+        if (
+            not mft
+            or self.segment is None
+            or segment_reference(base)
+            or base.SequenceNumber
+            or any(error.startswith("fixup:") for error in self.errors)
+        ):
+            return
+
+        try:
+            segments = mft._extension_index.get((self.segment, self.header.SequenceNumber), [])
+        except (EOFError, OSError, ValueError) as e:
+            self._mark_attributes_incomplete(f"extension scan: {e}")
+            return
+
+        for segment in segments:
+            try:
+                extension = mft.get(segment)
+                reference = extension.header.BaseFileRecordSegment
+                if (
+                    segment == self.segment
+                    or segment_reference(reference) != self.segment
+                    or reference.SequenceNumber != self.header.SequenceNumber
+                    or (self.header.Flags ^ extension.header.Flags) & FILE_RECORD_SEGMENT_IN_USE
+                    or any(error.startswith("fixup:") for error in extension.errors)
+                ):
+                    continue
+                # Only inspect the physical extension itself. A list stored in an
+                # extension must not cause recursive or unrelated records to merge.
+                for collection in extension._parse_attributes().values():
+                    for attr in collection:
+                        attrs.add(attr)
+                self._mark_attributes_incomplete(
+                    f"extension {segment}: inferred from base reference; attribute list unavailable"
+                )
+                if not extension._attributes_complete:
+                    self._mark_attributes_incomplete(f"extension {segment}: incomplete recovered attributes")
+            except (Error, EOFError, OSError, ValueError) as e:
+                self._mark_attributes_incomplete(f"extension {segment}: {e}")
+
+    @property
+    def attributes_complete(self) -> bool:
+        """Whether attribute parsing and available extension resolution completed.
+
+        This does not establish the availability or integrity of external file data.
+        Inferred extensions do not establish completeness when a detached MFT's
+        nonresident attribute list cannot be read from a volume.
+        """
+        _ = self.attributes
+        return self._attributes_complete
+
+    def _mark_attributes_incomplete(self, message: str) -> None:
+        self._attributes_complete = False
+        self.errors.append(message)
+
+    @staticmethod
+    def _validate_attribute_offset(offset: int, limit: int) -> None:
+        if offset < len(c_ntfs._FILE_RECORD_SEGMENT_HEADER) or offset + 4 > limit:
+            raise BrokenMftError("Attribute offset is outside the used record data")
+
+    @staticmethod
+    def _validate_attribute_bounds(header: AttributeHeader, limit: int) -> None:
+        """Validate the extent before decoding data belonging to an attribute."""
+        if header.record_length == 0:
+            raise BrokenMftError("Attribute RecordLength is 0 but end not yet reached")
+        minimum = 24 if header.resident else 64
+        if header.record_length < minimum or header.record_length % 8 or header.offset + header.record_length > limit:
+            raise BrokenMftError("Attribute length is outside the used record data")
+
+        name_length = header.header.NameLength * 2
+        name_offset = header.header.NameOffset
+        if name_length and (name_offset < minimum or name_offset + name_length > header.record_length):
+            raise BrokenMftError("Attribute name is outside the attribute")
+
+        if header.resident:
+            value = header.header.Form.Resident
+            if (
+                value.ValueLength and value.ValueOffset < minimum
+            ) or value.ValueOffset + value.ValueLength > header.record_length:
+                raise BrokenMftError("Resident value is outside the attribute")
 
     @cached_property
     def resident(self) -> bool:
@@ -439,8 +627,13 @@ class MftRecord:
 
         Raises:
             FileNotFoundError: If there are no attributes with the given name and type.
+            BrokenMftError: If recovery found incomplete attributes or invalid fixup data.
         """  # noqa: E501
         attrs = self.attributes.find(name, attr_type)
+        if not self._attributes_complete:
+            raise BrokenMftError("Cannot access a stream with incomplete recovered attributes")
+        if any(error.startswith("fixup:") for error in self.errors):
+            raise BrokenMftError("Cannot access a stream with recovered fixup data")
         if not attrs:
             raise FileNotFoundError(f"No such stream on record {self}: ({name!r}, {attr_type})")
         return attrs
@@ -460,6 +653,7 @@ class MftRecord:
 
         Raises:
             FileNotFoundError: If there are no attributes with the given name and type.
+            BrokenMftError: If recovery found incomplete attributes or invalid fixup data.
         """
         return self._get_stream_attributes(name, attr_type).open(allocated)
 
@@ -478,6 +672,7 @@ class MftRecord:
 
         Raises:
             FileNotFoundError: If there are no attributes with the given name and type.
+            BrokenMftError: If recovery found incomplete attributes or invalid fixup data.
         """
         return self._get_stream_attributes(name, attr_type).size(allocated)
 
@@ -492,6 +687,7 @@ class MftRecord:
 
         Raises:
             FileNotFoundError: If there are no attributes with the given name and type.
+            BrokenMftError: If recovery found incomplete attributes or invalid fixup data.
         """
         return self._get_stream_attributes(name, attr_type).dataruns()
 

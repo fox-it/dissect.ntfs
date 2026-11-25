@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any, BinaryIO
 from dissect.util.stream import RangeStream, RunlistStream
 from dissect.util.ts import wintimestamp
 
-from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, IO_REPARSE_TAG, c_ntfs
-from dissect.ntfs.exceptions import MftNotAvailableError, VolumeNotAvailableError
+from dissect.ntfs.c_ntfs import ATTRIBUTE_TYPE_CODE, FILE_RECORD_SEGMENT_IN_USE, IO_REPARSE_TAG, c_ntfs
+from dissect.ntfs.exceptions import BrokenMftError, MftNotAvailableError, VolumeNotAvailableError
 from dissect.ntfs.util import ensure_volume, get_full_path, segment_reference, ts_to_ns, varint
 
 if TYPE_CHECKING:
@@ -124,7 +124,18 @@ class AttributeHeader:
         self.record = record
 
         fh.seek(offset)
-        self.header = c_ntfs._ATTRIBUTE_RECORD_HEADER(fh)
+        data = fh.read(24)
+        if len(data) != 24:
+            raise EOFError("Truncated attribute header")
+
+        header_size = len(c_ntfs._ATTRIBUTE_RECORD_HEADER)
+        if data[8] == 0:
+            # Resident headers are only 24 bytes. Pad the unused nonresident
+            # union without reading beyond the actual resident header.
+            data = data.ljust(header_size, b"\x00")
+        else:
+            data += fh.read(header_size - len(data))
+        self.header = c_ntfs._ATTRIBUTE_RECORD_HEADER(data)
 
     def __repr__(self) -> str:
         return f"<${self.type.name} size={self.size}>"
@@ -314,7 +325,7 @@ class AttributeList(AttributeRecord):
         return "<$ATTRIBUTE_LIST>"
 
     def attributes(self) -> Iterator[Attribute]:
-        """Iterate all entries within this ``$ATTRIBUTE_LIST`` and yield all embedded attributes."""
+        """Yield extension attributes, retaining partial metadata only in recovery mode."""
         if not self.record:
             raise MftNotAvailableError("Can't iterate $ATTRIBUTE_LIST attributes without a bounded MFT record")
 
@@ -326,10 +337,45 @@ class AttributeList(AttributeRecord):
                 continue
 
             seen.add(segment)
-            record = self.record.ntfs.mft(segment)
+            try:
+                record = self.record.ntfs.mft(segment)
+                self._validate_extension(entry, record)
+                attributes = record.attributes
+            except (BrokenMftError, EOFError, ValueError) as e:
+                if not self.record.recover:
+                    raise
+                self.record._mark_attributes_incomplete(f"extension {segment}: {e}")
+                continue
 
-            for attr_list in record.attributes.values():
+            if not record.attributes_complete or any(error.startswith("fixup:") for error in record.errors):
+                self.record._mark_attributes_incomplete(
+                    f"extension {segment}: incomplete or unverified recovered attributes"
+                )
+            for attr_list in attributes.values():
                 yield from attr_list
+
+    def _validate_extension(self, entry: c_ntfs._ATTRIBUTE_LIST_ENTRY, record: MftRecord) -> None:
+        """Reject records belonging to another generation or another base file."""
+        if record._attributes_loading:
+            raise BrokenMftError("Recursive attribute list")
+
+        deleted = not (self.record.header.Flags | record.header.Flags) & FILE_RECORD_SEGMENT_IN_USE
+        if not self._matches_sequence(entry.SegmentReference.SequenceNumber, record, deleted=deleted):
+            raise BrokenMftError("Extension sequence does not match its attribute-list reference")
+
+        base = record.header.BaseFileRecordSegment
+        if self.record.segment is not None and segment_reference(base) != self.record.segment:
+            raise BrokenMftError("Extension refers to a different base record")
+        if not self._matches_sequence(base.SequenceNumber, self.record, deleted=deleted):
+            raise BrokenMftError("Extension base sequence does not match its base record")
+
+    @staticmethod
+    def _matches_sequence(sequence: int, record: MftRecord, *, deleted: bool) -> bool:
+        # On deletion, NTFS advances the stored sequence but leaves references
+        # at the former generation. A later allocation resets zero to one.
+        return sequence == record.header.SequenceNumber or (
+            deleted and sequence > 0 and record.header.SequenceNumber == (sequence + 1) & 0xFFFF
+        )
 
 
 class StandardInformation(AttributeRecord):
